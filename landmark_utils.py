@@ -17,6 +17,16 @@ MOUTH_LOWER_INNER_RIGHT = 317
 MOUTH_LEFT_CORNER = 61
 MOUTH_RIGHT_CORNER = 291
 
+# Eyebrow landmarks (inner + mid points for robust brow tracking)
+RIGHT_BROW_INNER = 65
+RIGHT_BROW_MID = 105
+LEFT_BROW_INNER = 295
+LEFT_BROW_MID = 334
+
+# Upper eyelid landmarks (for brow-eye distance)
+RIGHT_UPPER_EYE = 159
+LEFT_UPPER_EYE = 386
+
 # Face width / height reference points
 FACE_LEFT = 234
 FACE_RIGHT = 454
@@ -70,6 +80,23 @@ def compute_smile_coefficient(landmarks):
     return (center_y - corner_avg_y) / face_h
 
 
+def compute_brow_distance(landmarks):
+    """Average distance from brow to upper eyelid, normalized by face height.
+
+    Uses both inner and mid brow points per side for robustness — inner brows
+    furrow the most during anger, so averaging captures more signal.
+    Lower values indicate furrowed/lowered brows (anger, concentration).
+    """
+    right_inner = euclidean_distance(landmarks[RIGHT_BROW_INNER], landmarks[RIGHT_UPPER_EYE])
+    right_mid = euclidean_distance(landmarks[RIGHT_BROW_MID], landmarks[RIGHT_UPPER_EYE])
+    left_inner = euclidean_distance(landmarks[LEFT_BROW_INNER], landmarks[LEFT_UPPER_EYE])
+    left_mid = euclidean_distance(landmarks[LEFT_BROW_MID], landmarks[LEFT_UPPER_EYE])
+    face_h = euclidean_distance(landmarks[FACE_TOP], landmarks[FACE_BOTTOM])
+    if face_h == 0:
+        return 0.0
+    return (right_inner + right_mid + left_inner + left_mid) / (4.0 * face_h)
+
+
 def compute_eye_position(landmarks, eye_indices):
     """Iris center position relative to eye bounding box (0-1 range for x and y)."""
     pts = np.array([landmarks[i] for i in eye_indices])
@@ -92,6 +119,7 @@ def extract_all_parameters(landmarks):
     mar = compute_mar(landmarks)
     mouth_width = compute_mouth_width(landmarks)
     smile_coeff = compute_smile_coefficient(landmarks)
+    brow_dist = compute_brow_distance(landmarks)
 
     eye_pos_right = compute_eye_position(landmarks, RIGHT_EYE)
     eye_pos_left = compute_eye_position(landmarks, LEFT_EYE)
@@ -103,6 +131,7 @@ def extract_all_parameters(landmarks):
         "mar": mar,
         "mouth_width": mouth_width,
         "smile_coeff": smile_coeff,
+        "brow_dist": brow_dist,
         "eye_pos_right": eye_pos_right,
         "eye_pos_left": eye_pos_left,
     }

@@ -31,6 +31,8 @@ def main():
         min_tracking_confidence=0.5,
     )
 
+    frame_count = 0
+
     with FaceLandmarker.create_from_options(options) as landmarker:
         while True:
             ret, frame = cap.read()
@@ -65,6 +67,13 @@ def main():
                 params = extract_all_parameters(landmarks)
                 emotion = classify_emotion(params)
 
+                # Debug: print raw values every 30 frames for threshold tuning
+                frame_count += 1
+                if frame_count % 30 == 0:
+                    print(f"[{emotion:>10s}]  EAR={params['ear_avg']:.3f}  "
+                          f"MAR={params['mar']:.3f}  Smile={params['smile_coeff']:.4f}  "
+                          f"MouthW={params['mouth_width']:.3f}  BrowD={params['brow_dist']:.4f}")
+
                 # Overlay metrics
                 y_offset = 30
                 lines = [
@@ -73,6 +82,7 @@ def main():
                     f"MAR: {params['mar']:.3f}",
                     f"Smile: {params['smile_coeff']:.4f}",
                     f"Mouth W: {params['mouth_width']:.3f}",
+                    f"Brow D: {params['brow_dist']:.4f}",
                 ]
                 for i, line in enumerate(lines):
                     color = (0, 255, 255) if i == 0 else (255, 255, 255)
