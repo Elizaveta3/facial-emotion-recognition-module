@@ -1,248 +1,248 @@
-# Facial Emotion Recognition
+# Розпізнавання емоцій за виразом обличчя
 
-A real-time facial emotion recognition system that uses MediaPipe Face Mesh landmarks and rule-based classification to detect emotions from a webcam feed. The system computes geometric facial parameters (eye openness, mouth shape, brow position, smile curvature) and classifies them into one of five emotions: **Happy**, **Surprised**, **Angry**, **Sad**, or **Neutral**.
+Система розпізнавання емоцій у реальному часі, яка використовує точки обличчя MediaPipe Face Mesh та класифікацію на основі правил для визначення емоцій із потоку вебкамери. Система обчислює геометричні параметри обличчя (відкритість очей, форма рота, положення брів, кривизна усмішки) та класифікує їх в одну з п'яти емоцій: **Happy** (Радість), **Surprised** (Здивування), **Angry** (Злість), **Sad** (Сум) або **Neutral** (Нейтральний).
 
-It includes per-person baseline calibration so thresholds adapt to individual facial proportions, and exponential moving average (EMA) temporal smoothing to eliminate frame-to-frame label flickering.
+Система включає індивідуальну калібрацію базової лінії, щоб пороги адаптувалися до пропорцій обличчя конкретної людини, та темпоральне згладжування за допомогою експоненціального ковзного середнього (EMA) для усунення мерехтіння мітки між кадрами.
 
-## Setup
+## Налаштування
 
-### Requirements
+### Вимоги
 
 - Python 3.8+
-- A webcam
+- Вебкамера
 
-### Dependencies
+### Залежності
 
-Install the Python packages:
+Встановіть Python-пакети:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-The dependencies are:
+Залежності:
 
-| Package | Purpose |
+| Пакет | Призначення |
 |---|---|
-| `opencv-python` | Webcam capture, image display, drawing overlays |
-| `mediapipe` | Face landmark detection (468-point Face Mesh) |
-| `numpy` | Euclidean distance and array operations |
+| `opencv-python` | Захоплення з вебкамери, відображення зображення, малювання накладок |
+| `mediapipe` | Визначення точок обличчя (468-точкова Face Mesh) |
+| `numpy` | Евклідова відстань та операції з масивами |
 
-### Face Landmarker Model
+### Модель Face Landmarker
 
-The system requires the MediaPipe Face Landmarker model file `face_landmarker.task` in the project root. Download it from the [MediaPipe documentation](https://developers.google.com/mediapipe/solutions/vision/face_landmarker#models) if not already present.
+Система потребує файл моделі MediaPipe Face Landmarker `face_landmarker.task` у кореневій директорії проєкту. Завантажте його з [документації MediaPipe](https://developers.google.com/mediapipe/solutions/vision/face_landmarker#models), якщо він ще відсутній.
 
-### Running
+### Запуск
 
 ```bash
 python main.py
 ```
 
-On launch the system opens your webcam, runs a ~3-second calibration phase, then enters the main detection loop. Press **q** at any time to quit.
+Після запуску система відкриває вебкамеру, проводить фазу калібрації (~3 секунди), а потім переходить до основного циклу розпізнавання. Натисніть **q** у будь-який момент для виходу.
 
-## System Overview
+## Огляд системи
 
 ```
-main.py                  Entry point — calibration, main loop, display, export
-landmark_utils.py        Extracts geometric parameters from 468 face landmarks
-emotion_classifier.py    Rule-based classifier (absolute + delta modes)
-calibration.py           Collects neutral-face frames and computes per-person baseline
-smoothing.py             Exponential moving average filter for parameter smoothing
+main.py                  Точка входу — калібрація, основний цикл, відображення, експорт
+landmark_utils.py        Обчислення геометричних параметрів із 468 точок обличчя
+emotion_classifier.py    Класифікатор на основі правил (абсолютний + дельта-режими)
+calibration.py           Збір кадрів нейтрального обличчя та обчислення індивідуальної базової лінії
+smoothing.py             Фільтр експоненціального ковзного середнього для згладжування параметрів
 ```
 
 ### `main.py`
 
-Orchestrates the full pipeline:
-1. Opens the webcam and initializes the MediaPipe FaceLandmarker in video mode.
-2. Runs a calibration phase (`run_calibration`) that collects 90 neutral-face frames (~3 seconds at 30 fps) and computes a per-person baseline. If the user presses `q` during calibration or no face is detected, the system falls back to absolute-threshold mode.
-3. Enters the main loop: each frame is captured, landmarks are extracted, raw parameters are smoothed via EMA, and the smoothed values are passed to the classifier along with the baseline (if available).
-4. Draws landmark points, the current emotion label, the classification mode (`[CALIBRATED]` or `[ABSOLUTE]`), and live parameter values on the webcam feed.
-5. Logs debug output to the console every 30 frames.
-6. On exit, writes per-frame data to CSV and JSON files in the `output/` directory.
+Організовує повний конвеєр обробки:
+1. Відкриває вебкамеру та ініціалізує MediaPipe FaceLandmarker у відеорежимі.
+2. Запускає фазу калібрації (`run_calibration`), яка збирає 90 кадрів нейтрального обличчя (~3 секунди при 30 fps) та обчислює індивідуальну базову лінію. Якщо користувач натискає `q` під час калібрації або обличчя не виявлено, система переходить у режим абсолютних порогів.
+3. Переходить до основного циклу: кожен кадр захоплюється, точки обличчя виділяються, сирі параметри згладжуються через EMA, а згладжені значення передаються класифікатору разом із базовою лінією (якщо доступна).
+4. Малює точки обличчя, поточну мітку емоції, режим класифікації (`[CALIBRATED]` або `[ABSOLUTE]`) та значення параметрів у реальному часі на відеопотоці.
+5. Записує відлагоджувальний вивід у консоль кожні 30 кадрів.
+6. При виході записує покадрові дані у файли CSV та JSON у директорії `output/`.
 
 ### `landmark_utils.py`
 
-Computes all geometric facial parameters from the 468-point MediaPipe Face Mesh. Each parameter is normalized by face width or face height so values are scale-invariant. See [Parameters](#parameters) below for details on each one.
+Обчислює всі геометричні параметри обличчя з 468-точкової моделі MediaPipe Face Mesh. Кожен параметр нормалізується за шириною або висотою обличчя, тому значення не залежать від масштабу. Детальний опис кожного параметра дивіться у розділі [Параметри](#параметри).
 
 ### `emotion_classifier.py`
 
-Contains the rule-based classification logic. Operates in two modes:
-- **Absolute mode** (`_classify_absolute`) — uses fixed thresholds; works without calibration.
-- **Delta mode** (`_classify_delta`) — computes the difference between the current value and the calibrated neutral baseline, then applies delta thresholds. Activated automatically when calibration succeeds.
+Містить логіку класифікації на основі правил. Працює у двох режимах:
+- **Абсолютний режим** (`_classify_absolute`) — використовує фіксовані пороги; працює без калібрації.
+- **Дельта-режим** (`_classify_delta`) — обчислює різницю між поточним значенням та відкаліброваною нейтральною базовою лінією, потім застосовує дельта-пороги. Активується автоматично при успішній калібрації.
 
 ### `calibration.py`
 
-`BaselineCalibrator` collects facial parameter snapshots over 90 frames while the user holds a neutral expression. It averages each parameter across all collected frames to produce a stable baseline dictionary.
+`BaselineCalibrator` збирає знімки параметрів обличчя протягом 90 кадрів, поки користувач тримає нейтральний вираз. Усереднює кожен параметр по всіх зібраних кадрах для отримання стабільного словника базової лінії.
 
 ### `smoothing.py`
 
-`ParameterSmoother` applies an exponential moving average (EMA) to each scalar parameter. The formula is:
+`ParameterSmoother` застосовує експоненціальне ковзне середнє (EMA) до кожного скалярного параметра. Формула:
 
 ```
 smoothed = alpha * new_value + (1 - alpha) * previous_smoothed
 ```
 
-The default `alpha=0.3` means each frame contributes 30% of the new value and retains 70% of the previous smoothed value, producing stable output while still responding to real expression changes.
+Стандартне значення `alpha=0.3` означає, що кожен кадр вносить 30% нового значення та зберігає 70% попереднього згладженого значення, забезпечуючи стабільний вивід при збереженні реакції на реальні зміни виразу обличчя.
 
-## Parameters
+## Параметри
 
-Five scalar parameters are computed from face landmarks each frame:
+П'ять скалярних параметрів обчислюються з точок обличчя на кожному кадрі:
 
-### Eye Aspect Ratio (EAR)
+### Eye Aspect Ratio (EAR) — Співвідношення сторін ока
 
-Measures how open the eyes are.
+Вимірює ступінь відкритості очей.
 
 ```
 EAR = (||p2 - p6|| + ||p3 - p5||) / (2 * ||p1 - p4||)
 ```
 
-Where p1-p6 are six points around each eye (outer corner, upper-outer, upper-inner, inner corner, lower-inner, lower-outer). Computed separately for each eye, then averaged. Higher values indicate wider-open eyes; lower values indicate squinting or closed eyes.
+Де p1-p6 — шість точок навколо кожного ока (зовнішній кут, верхня зовнішня, верхня внутрішня, внутрішній кут, нижня внутрішня, нижня зовнішня). Обчислюється окремо для кожного ока, потім усереднюється. Вищі значення означають ширше відкриті очі; нижчі — примружування або закриті очі.
 
-### Mouth Aspect Ratio (MAR)
+### Mouth Aspect Ratio (MAR) — Співвідношення сторін рота
 
-Measures how open the mouth is.
+Вимірює ступінь відкритості рота.
 
 ```
 MAR = (v_a + v_b + v_c) / (3 * horizontal)
 ```
 
-Three vertical mouth distances (top-bottom center, upper-inner-left to lower-inner-left, upper-inner-right to lower-inner-right) divided by the horizontal mouth corner distance. Higher values mean a more open mouth.
+Три вертикальні відстані рота (центр верх-низ, верхня внутрішня ліва до нижньої внутрішньої лівої, верхня внутрішня права до нижньої внутрішньої правої), поділені на горизонтальну відстань між кутами рота. Вищі значення означають більш відкритий рот.
 
-### Smile Coefficient
+### Smile Coefficient — Коефіцієнт усмішки
 
-Measures mouth corner elevation relative to the mouth center, normalized by face height.
+Вимірює підняття кутів рота відносно центру рота, нормалізоване за висотою обличчя.
 
 ```
 smile_coeff = (center_y - corner_avg_y) / face_height
 ```
 
-Since pixel y-coordinates increase downward, a positive value means the mouth corners are higher than the center (smiling). A negative value means corners are pulled down (frowning). Values are small (typically -0.01 to +0.01) because they are normalized by face height.
+Оскільки піксельні y-координати зростають донизу, позитивне значення означає, що кути рота вище за центр (усмішка). Негативне значення означає, що кути опущені (сум). Значення малі (зазвичай від -0.01 до +0.01), оскільки нормалізовані за висотою обличчя.
 
-### Mouth Width
+### Mouth Width — Ширина рота
 
-Horizontal distance between the left and right mouth corners, normalized by face width.
+Горизонтальна відстань між лівим та правим кутами рота, нормалізована за шириною обличчя.
 
 ```
 mouth_width = ||left_corner - right_corner|| / face_width
 ```
 
-Increases during smiles as the mouth stretches horizontally. Typical neutral values are around 0.38-0.42.
+Збільшується під час усмішки, коли рот розтягується горизонтально. Типові нейтральні значення — приблизно 0.38-0.42.
 
-### Brow Distance
+### Brow Distance — Відстань брів
 
-Average distance from the eyebrow to the upper eyelid, normalized by face height.
+Середня відстань від брови до верхньої повіки, нормалізована за висотою обличчя.
 
 ```
 brow_dist = (right_inner + right_mid + left_inner + left_mid) / (4 * face_height)
 ```
 
-Uses both the inner and mid brow points on each side for robustness. Lower values indicate furrowed or lowered brows (associated with anger or concentration).
+Використовує внутрішні та середні точки брів з кожного боку для надійності. Нижчі значення вказують на насуплені або опущені брови (пов'язано зі злістю або зосередженістю).
 
-## Emotions Recognized
+## Розпізнавані емоції
 
-The classifier evaluates rules in priority order and returns the first match:
+Класифікатор перевіряє правила у порядку пріоритету та повертає перший збіг:
 
-### 1. Surprised
+### 1. Surprised (Здивування)
 
-Wide eyes **and** wide-open mouth.
+Широко відкриті очі **та** широко відкритий рот.
 
-| Mode | Condition |
+| Режим | Умова |
 |---|---|
-| Absolute | `EAR > 0.30` and `MAR > 0.5` |
-| Delta | `d_ear > +0.04` and `d_mar > +0.35` |
+| Абсолютний | `EAR > 0.30` та `MAR > 0.5` |
+| Дельта | `d_ear > +0.04` та `d_mar > +0.35` |
 
-### 2. Happy
+### 2. Happy (Радість)
 
-Mouth corners raised **and** (mouth slightly open **or** mouth widened).
+Кути рота підняті **та** (рот злегка відкритий **або** рот розширений).
 
-| Mode | Condition |
+| Режим | Умова |
 |---|---|
-| Absolute | `smile > 0.005` and (`MAR >= 0.1` or `mouth_width > 0.43`) |
-| Delta | `d_smile > +0.006` and (`d_mar > -0.01` or `d_mw > +0.015`) |
+| Абсолютний | `smile > 0.005` та (`MAR >= 0.1` або `mouth_width > 0.43`) |
+| Дельта | `d_smile > +0.006` та (`d_mar > -0.01` або `d_mw > +0.015`) |
 
-### 3. Angry
+### 3. Angry (Злість)
 
-Smile drops below neutral **and** (brows furrowed **or** eyes narrowed with tight mouth). Two detection paths so a strong signal in one dimension is not gated by a borderline other.
+Усмішка падає нижче нейтрального рівня **та** (брови насуплені **або** очі звужені з напруженим ротом). Два шляхи визначення, щоб сильний сигнал в одному вимірі не блокувався граничним значенням іншого.
 
-| Mode | Condition |
+| Режим | Умова |
 |---|---|
-| Absolute | `smile < 0.005` and (`brow_dist < 0.055` or (`EAR < 0.26` and `MAR < 0.15`)) |
-| Delta | `d_smile < -0.006` and (`d_brow < -0.02` or (`d_ear < -0.03` and `d_mar < 0.08`)) |
+| Абсолютний | `smile < 0.005` та (`brow_dist < 0.055` або (`EAR < 0.26` та `MAR < 0.15`)) |
+| Дельта | `d_smile < -0.006` та (`d_brow < -0.02` або (`d_ear < -0.03` та `d_mar < 0.08`)) |
 
-### 4. Sad
+### 4. Sad (Сум)
 
-Mouth corners pulled down with normal eyes and normal brows. The brow guard prevents angry faces from leaking into Sad.
+Кути рота опущені з нормальними очима та нормальними бровами. Захист за бровами запобігає потраплянню злих облич у категорію "Сум".
 
-| Mode | Condition |
+| Режим | Умова |
 |---|---|
-| Absolute | `smile < -0.005` and `EAR >= 0.26` and `brow_dist >= 0.055` |
-| Delta | `d_smile < -0.006` and `d_ear >= -0.03` and `d_brow >= -0.02` |
+| Абсолютний | `smile < -0.005` та `EAR >= 0.26` та `brow_dist >= 0.055` |
+| Дельта | `d_smile < -0.006` та `d_ear >= -0.03` та `d_brow >= -0.02` |
 
-### 5. Neutral
+### 5. Neutral (Нейтральний)
 
-Returned when no other rule matches.
+Повертається, коли жодне інше правило не спрацювало.
 
-## Calibration and Smoothing
+## Калібрація та згладжування
 
-### Per-Person Baseline Calibration
+### Індивідуальна калібрація базової лінії
 
-**Problem:** Fixed absolute thresholds (e.g., `EAR_LOW = 0.26`) assume everyone has the same resting facial proportions. Someone with naturally narrow eyes may permanently read as "Angry" because their resting EAR is below the threshold.
+**Проблема:** Фіксовані абсолютні пороги (наприклад, `EAR_LOW = 0.26`) припускають, що у всіх однакові пропорції обличчя у спокої. Людина з природно вузькими очима може постійно отримувати мітку "Angry", оскільки її EAR у стані спокою нижчий за поріг.
 
-**Solution:** On startup, the system collects 90 frames (~3 seconds) of the user's neutral face and averages each parameter to build a personal baseline. During classification, the system computes deltas (current value minus baseline) and applies delta thresholds instead. This means "Happy" is defined as *your smile coefficient increasing from your neutral*, not exceeding a fixed number.
+**Рішення:** При запуску система збирає 90 кадрів (~3 секунди) нейтрального обличчя користувача та усереднює кожен параметр для побудови персональної базової лінії. Під час класифікації система обчислює дельти (поточне значення мінус базова лінія) та застосовує дельта-пороги. Це означає, що "Happy" визначається як *збільшення вашого коефіцієнта усмішки відносно вашого нейтрального стану*, а не перевищення фіксованого числа.
 
-**Fallback:** If calibration is skipped (press `q`) or fails (no face detected), the system falls back to absolute-threshold mode and still works.
+**Резервний режим:** Якщо калібрація пропущена (натиснуто `q`) або не вдалася (обличчя не виявлено), система переходить у режим абсолютних порогів і продовжує працювати.
 
-### Temporal Smoothing (EMA)
+### Темпоральне згладжування (EMA)
 
-**Problem:** MediaPipe landmark positions jitter slightly between frames even when the face is still. This causes parameters to fluctuate, making the emotion label flicker rapidly.
+**Проблема:** Позиції точок обличчя MediaPipe злегка тремтять між кадрами, навіть коли обличчя нерухоме. Це спричиняє коливання параметрів, через що мітка емоції швидко мерехтить.
 
-**Solution:** An exponential moving average (EMA) with `alpha = 0.3` smooths each parameter before classification. The smoothed value is a weighted blend of the new reading (30%) and the previous smoothed value (70%). This eliminates jitter while still tracking real expression changes within a few frames.
+**Рішення:** Експоненціальне ковзне середнє (EMA) з `alpha = 0.3` згладжує кожен параметр перед класифікацією. Згладжене значення — це зважена суміш нового показника (30%) та попереднього згладженого значення (70%). Це усуває тремтіння, зберігаючи здатність відстежувати реальні зміни виразу обличчя протягом кількох кадрів.
 
-Both raw and smoothed values are exported so the smoothing effect can be verified.
+Як сирі, так і згладжені значення експортуються, щоб ефект згладжування можна було перевірити.
 
-## Output
+## Вивід
 
-### Webcam Overlay
+### Накладка на вебкамеру
 
-The live video feed displays:
-- Green dots on all 468 face landmarks
-- The detected emotion label and classification mode (e.g., `Emotion: Happy  [CALIBRATED]`) in yellow
-- Live parameter values (EAR, MAR, Smile, Mouth W, Brow D) in white
+Відеопотік у реальному часі відображає:
+- Зелені точки на всіх 468 точках обличчя
+- Мітку визначеної емоції та режим класифікації (наприклад, `Emotion: Happy  [CALIBRATED]`) жовтим кольором
+- Значення параметрів у реальному часі (EAR, MAR, Smile, Mouth W, Brow D) білим кольором
 
-During calibration, a progress bar and instruction text are shown instead.
+Під час калібрації замість цього відображається шкала прогресу та текст із інструкцією.
 
-### Console Logs
+### Консольні логи
 
-Every 30 frames, a debug line is printed:
+Кожні 30 кадрів виводиться відлагоджувальний рядок:
 
 ```
 [CALIBRATED] [     Happy]  EAR=0.287  MAR=0.152  Smile=0.0081  MouthW=0.441  BrowD=0.0612
 ```
 
-This includes the classification mode, the detected emotion, and all smoothed parameter values.
+Він включає режим класифікації, визначену емоцію та всі згладжені значення параметрів.
 
-### CSV Export
+### Експорт CSV
 
-Saved to `output/session_<timestamp>.csv`. Each row is one frame:
+Зберігається у `output/session_<timestamp>.csv`. Кожен рядок — один кадр:
 
-| Column | Description |
+| Стовпець | Опис |
 |---|---|
-| `frame` | Frame number (1-indexed) |
-| `timestamp` | Unix timestamp in milliseconds |
-| `emotion` | Detected emotion label |
-| `ear_avg_raw` | Raw (unsmoothed) eye aspect ratio |
-| `mar_raw` | Raw mouth aspect ratio |
-| `smile_coeff_raw` | Raw smile coefficient |
-| `mouth_width_raw` | Raw mouth width |
-| `brow_dist_raw` | Raw brow distance |
-| `ear_avg_smooth` | Smoothed eye aspect ratio |
-| `mar_smooth` | Smoothed mouth aspect ratio |
-| `smile_coeff_smooth` | Smoothed smile coefficient |
-| `mouth_width_smooth` | Smoothed mouth width |
-| `brow_dist_smooth` | Smoothed brow distance |
+| `frame` | Номер кадру (починаючи з 1) |
+| `timestamp` | Мітка часу Unix у мілісекундах |
+| `emotion` | Мітка визначеної емоції |
+| `ear_avg_raw` | Сире (незгладжене) співвідношення сторін ока |
+| `mar_raw` | Сире співвідношення сторін рота |
+| `smile_coeff_raw` | Сирий коефіцієнт усмішки |
+| `mouth_width_raw` | Сира ширина рота |
+| `brow_dist_raw` | Сира відстань брів |
+| `ear_avg_smooth` | Згладжене співвідношення сторін ока |
+| `mar_smooth` | Згладжене співвідношення сторін рота |
+| `smile_coeff_smooth` | Згладжений коефіцієнт усмішки |
+| `mouth_width_smooth` | Згладжена ширина рота |
+| `brow_dist_smooth` | Згладжена відстань брів |
 
-### JSON Export
+### Експорт JSON
 
-Saved to `output/session_<timestamp>.json`. Contains metadata and all frame records:
+Зберігається у `output/session_<timestamp>.json`. Містить метадані та всі покадрові записи:
 
 ```json
 {
@@ -281,4 +281,4 @@ Saved to `output/session_<timestamp>.json`. Contains metadata and all frame reco
 }
 ```
 
-When calibration is skipped, `calibration.enabled` is `false` and `calibration.baseline` is `null`.
+Коли калібрація пропущена, `calibration.enabled` дорівнює `false`, а `calibration.baseline` дорівнює `null`.
