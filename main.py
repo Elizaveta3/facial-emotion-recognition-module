@@ -17,11 +17,11 @@ OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 
 CSV_FIELDS = [
     "frame", "timestamp", "emotion",
-    "ear_avg_raw", "mar_raw", "smile_coeff_raw", "mouth_width_raw", "brow_dist_raw",
-    "ear_avg_smooth", "mar_smooth", "smile_coeff_smooth", "mouth_width_smooth", "brow_dist_smooth",
+    "ear_avg_raw", "mar_raw", "smile_coeff_raw", "mouth_width_raw", "brow_dist_raw", "mouth_asymmetry_raw", "upper_lip_raise_raw",
+    "ear_avg_smooth", "mar_smooth", "smile_coeff_smooth", "mouth_width_smooth", "brow_dist_smooth", "mouth_asymmetry_smooth", "upper_lip_raise_smooth",
 ]
 
-SCALAR_KEYS = ["ear_avg", "mar", "smile_coeff", "mouth_width", "brow_dist"]
+SCALAR_KEYS = ["ear_avg", "mar", "smile_coeff", "mouth_width", "brow_dist", "mouth_asymmetry", "upper_lip_raise"]
 
 
 def run_calibration(cap, landmarker, calibrator):
@@ -175,7 +175,8 @@ def main():
                 if frame_count % 30 == 0:
                     print(f"[{mode}] [{emotion:>10s}]  EAR={smoothed['ear_avg']:.3f}  "
                           f"MAR={smoothed['mar']:.3f}  Smile={smoothed['smile_coeff']:.4f}  "
-                          f"MouthW={smoothed['mouth_width']:.3f}  BrowD={smoothed['brow_dist']:.4f}")
+                          f"MouthW={smoothed['mouth_width']:.3f}  BrowD={smoothed['brow_dist']:.4f}  "
+                          f"Asym={smoothed['mouth_asymmetry']:.4f}  LipRaise={smoothed['upper_lip_raise']:.3f}")
 
                 # ── Per-frame record ────────────────────────────────────────
                 # Scalar metrics (raw + smoothed) go to both CSV and JSON.
@@ -207,6 +208,8 @@ def main():
                     f"Smile: {smoothed['smile_coeff']:.4f}",
                     f"Mouth W: {smoothed['mouth_width']:.3f}",
                     f"Brow D: {smoothed['brow_dist']:.4f}",
+                    f"Asym: {smoothed['mouth_asymmetry']:.4f}",
+                    f"LipRaise: {smoothed['upper_lip_raise']:.3f}",
                 ]
                 for i, line in enumerate(lines):
                     color = (0, 255, 255) if i == 0 else (255, 255, 255)
