@@ -7,7 +7,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
-from landmark_utils import extract_all_parameters
+from landmark_utils import extract_all_parameters, landmarks_to_list
 from emotion_classifier import classify_emotion
 from calibration import BaselineCalibrator
 from smoothing import ParameterSmoother
@@ -65,8 +65,8 @@ def run_calibration(cap, landmarker, calibrator):
                         (30, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         else:
             face_lms = results.face_landmarks[0]
-            landmarks = np.array([[lm.x * w, lm.y * h] for lm in face_lms])
-            params = extract_all_parameters(landmarks)
+            landmarks_2d = np.array([[lm.x * w, lm.y * h] for lm in face_lms])
+            params = extract_all_parameters(landmarks_2d)
             calibrator.add_frame(params)
 
         cv2.imshow("Facial Emotion Recognition", frame)
@@ -107,7 +107,7 @@ def main():
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     session_id = time.strftime("%Y%m%d_%H%M%S")
-    csv_path = os.path.join(OUTPUT_DIR, f"session_{session_id}.csv")
+    csv_path  = os.path.join(OUTPUT_DIR, f"session_{session_id}.csv")
     json_path = os.path.join(OUTPUT_DIR, f"session_{session_id}.json")
 
     json_records = []
@@ -115,19 +115,19 @@ def main():
 
     smoother = ParameterSmoother(alpha=0.3)
 
-    csv_file = open(csv_path, "w", newline="")
+    csv_file   = open(csv_path, "w", newline="")
     csv_writer = csv.DictWriter(csv_file, fieldnames=CSV_FIELDS)
     csv_writer.writeheader()
 
     with FaceLandmarker.create_from_options(options) as landmarker:
         # ── Calibration phase ───────────────────────────────────
         calibrator = BaselineCalibrator(num_frames=90)
-        baseline = run_calibration(cap, landmarker, calibrator)
+        baseline   = run_calibration(cap, landmarker, calibrator)
 
         if baseline is not None:
             mode = "CALIBRATED"
         else:
-            mode = "ABSOLUTE"
+            mode     = "ABSOLUTE"
             baseline = None  # explicit for clarity
         print(f"Running in [{mode}] mode.\n")
 
@@ -141,7 +141,7 @@ def main():
             h, w, _ = frame.shape
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            mp_image  = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
             timestamp_ms = int(time.time() * 1000)
 
             results = landmarker.detect_for_video(mp_image, timestamp_ms)
@@ -152,19 +152,23 @@ def main():
             else:
                 face_lms = results.face_landmarks[0]
 
-                # Convert normalised landmarks to pixel coordinates
-                landmarks = np.array([
-                    [lm.x * w, lm.y * h] for lm in face_lms
+                # ── Build 3D landmark array (N×3: pixel x, pixel y, raw z) ──
+                # MediaPipe z is in the same scale as x (normalised to image
+                # width), so we keep it as-is rather than multiplying by h.
+                landmarks_3d = np.array([
+                    [lm.x * w, lm.y * h, lm.z * w]
+                    for lm in face_lms
                 ])
 
-                # Draw landmark points
-                for x, y in landmarks.astype(int):
+                # Draw landmark points using x/y projection
+                for x, y, *_ in landmarks_3d.astype(int):
                     cv2.circle(frame, (x, y), 1, (0, 255, 0), -1)
 
-                # Compute raw parameters, smooth, then classify
-                raw_params = extract_all_parameters(landmarks)
-                smoothed = smoother.update(raw_params)
-                emotion = classify_emotion(smoothed, baseline)
+                # Compute raw parameters (2D metrics — z ignored internally),
+                # smooth, then classify.
+                raw_params = extract_all_parameters(landmarks_3d)
+                smoothed   = smoother.update(raw_params)
+                emotion    = classify_emotion(smoothed, baseline)
 
                 # Debug: print raw values every 30 frames
                 frame_count += 1
@@ -173,17 +177,26 @@ def main():
                           f"MAR={smoothed['mar']:.3f}  Smile={smoothed['smile_coeff']:.4f}  "
                           f"MouthW={smoothed['mouth_width']:.3f}  BrowD={smoothed['brow_dist']:.4f}")
 
-                # Save per-frame record with both raw and smoothed values
+                # ── Per-frame record ────────────────────────────────────────
+                # Scalar metrics (raw + smoothed) go to both CSV and JSON.
+                # Full 3D landmarks go to JSON only (too wide for CSV).
                 record = {
-                    "frame": frame_count,
+                    "frame":     frame_count,
                     "timestamp": timestamp_ms,
-                    "emotion": emotion,
+                    "emotion":   emotion,
                 }
                 for k in SCALAR_KEYS:
-                    record[f"{k}_raw"] = round(raw_params[k], 5)
+                    record[f"{k}_raw"]    = round(raw_params[k], 5)
                     record[f"{k}_smooth"] = round(smoothed[k], 5)
+
                 csv_writer.writerow(record)
-                json_records.append(record)
+
+                # JSON record also includes full 3D landmark array.
+                # Each element is [x_px, y_px, z_px] rounded to 5 d.p.
+                json_record = dict(record)
+                json_record["landmarks_3d"] = landmarks_to_list(landmarks_3d)
+                json_records.append(json_record)
+                print("TOTAL JSON RECORDS:", len(json_records))
 
                 # Overlay metrics
                 y_offset = 30
@@ -201,7 +214,9 @@ def main():
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
             cv2.imshow("Facial Emotion Recognition", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            key = cv2.waitKey(10)
+
+            if key & 0xFF == ord("q") or key == 27:
                 break
 
     csv_file.close()
@@ -211,12 +226,21 @@ def main():
     json_output = {
         "session": session_id,
         "calibration": {
-            "enabled": calibration_enabled,
+            "enabled":  calibration_enabled,
             "baseline": baseline,
         },
         "smoothing": {
             "enabled": True,
-            "alpha": smoother.alpha,
+            "alpha":   smoother.alpha,
+        },
+        # landmarks_3d schema: each frame["landmarks_3d"] is a list of 478
+        # points, each point being [x_px, y_px, z_px].  x and y are in pixel
+        # coordinates; z uses the same scale as x (normalised to image width
+        # then multiplied by w), representing depth relative to the face centre.
+        "landmarks_schema": {
+            "format":      "[x_px, y_px, z_px]",
+            "count":       478,
+            "z_reference": "face_centre_depth_same_scale_as_x",
         },
         "frames": json_records,
     }
