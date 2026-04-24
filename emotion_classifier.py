@@ -69,13 +69,11 @@ def classify_emotion(params, baseline=None):
     return _classify_delta(params, baseline)
 
 
-def _absolute_disgust_signal(ear, brow_dist, upper_lip_raise, mar, smile):
+def _absolute_disgust_signal(ear, brow_dist, mar, smile):
     return (
         ear < EAR_LOW
         and brow_dist < BROW_DIST_FURROWED
-        and
-        upper_lip_raise < UPPER_LIP_RAISE_DISGUST
-        and MAR_CLOSED < mar < MAR_MODERATE
+        and MAR_LOW < mar < MAR_HIGH
         and smile < SMILE_COEFF_HIGH
     )
 
@@ -90,13 +88,11 @@ def _absolute_angry_signal(ear, brow_dist, mar, mouth_asym, smile, upper_lip_rai
     return brow_dist < BROW_DIST_FURROWED and EAR_LOW <= ear <= EAR_HIGH
 
 
-def _delta_disgust_signal(d_ear, d_brow, d_lip_raise, d_mar, d_smile):
+def _delta_disgust_signal(d_ear, d_brow, d_mar, d_smile):
     return (
         d_ear < DELTA_EAR_LOW
         and d_brow < DELTA_BROW_FURROWED
-        and
-        d_lip_raise < -DELTA_LIP_RAISE_STRONG
-        and DELTA_MAR_CLOSED < d_mar < DELTA_MAR_MOD
+        and DELTA_MAR_MOD < d_mar < DELTA_MAR_HIGH
         and d_smile < DELTA_SMILE_HIGH
     )
 
@@ -181,7 +177,7 @@ def _classify_absolute(params):
 
     # Disgust: primarily driven by upper-lip raise. Eye/brow tension can co-exist,
     # but lip raise must be the lead signal.
-    if _absolute_disgust_signal(ear, brow_dist, upper_lip_raise, mar, smile):
+    if _absolute_disgust_signal(ear, brow_dist, mar, smile):
         return "Disgusted"
 
     # Angry: furrowed brows and/or tense eyes, but without the upper-lip raise
@@ -229,7 +225,7 @@ def _classify_delta(params, baseline):
         return "Contempt"
 
     # Disgust: strong upper-lip raise is the primary cue.
-    if _delta_disgust_signal(d_ear, d_brow, d_lip_raise, d_mar, d_smile):
+    if _delta_disgust_signal(d_ear, d_brow, d_mar, d_smile):
         return "Disgusted"
 
     # Angry: brows/eyes lead the decision, and strong lip raise blocks it so
