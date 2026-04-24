@@ -12,6 +12,7 @@ EAR_TENSE = 0.245
 MAR_HIGH = 0.50
 MAR_MODERATE = 0.15
 MAR_LOW = 0.10
+MAR_CLOSED = 0.08
 
 MOUTH_WIDTH_SMILE = 0.43
 
@@ -34,6 +35,7 @@ DELTA_EAR_TENSE = -0.02
 DELTA_MAR_HIGH = 0.35
 DELTA_MAR_MOD = 0.08
 DELTA_MAR_LOW = -0.01
+DELTA_MAR_CLOSED = 0.03
 DELTA_MW_SMILE = 0.015
 DELTA_BROW_LOW = -0.02
 DELTA_BROW_FURROWED = -0.012
@@ -46,6 +48,7 @@ DELTA_LIP_RAISE_STRONG = 0.020
 
 EMOTIONS = (
     "Happy",
+    "Fear",
     "Surprised",
     "Angry",
     "Sad",
@@ -66,11 +69,13 @@ def classify_emotion(params, baseline=None):
     return _classify_delta(params, baseline)
 
 
-def _absolute_disgust_signal(upper_lip_raise, mar, mouth_asym, smile):
+def _absolute_disgust_signal(ear, brow_dist, upper_lip_raise, mar, smile):
     return (
+        ear < EAR_LOW
+        and brow_dist < BROW_DIST_FURROWED
+        and
         upper_lip_raise < UPPER_LIP_RAISE_DISGUST
-        and mar < MAR_MODERATE
-        and mouth_asym < MOUTH_ASYM_LOW
+        and MAR_CLOSED < mar < MAR_MODERATE
         and smile < SMILE_COEFF_HIGH
     )
 
@@ -80,16 +85,18 @@ def _absolute_angry_signal(ear, brow_dist, mar, mouth_asym, smile, upper_lip_rai
         return False
     if upper_lip_raise < UPPER_LIP_RAISE_BLOCK_ANGER:
         return False
-    brow_path = brow_dist < BROW_DIST_FURROWED and ear < EAR_HIGH
-    eyes_path = ear < EAR_TENSE and mar < MAR_MODERATE and brow_dist < BROW_DIST_RELAXED
-    return brow_path or eyes_path
+    if mar >= MAR_CLOSED:
+        return False
+    return brow_dist < BROW_DIST_FURROWED and EAR_LOW <= ear <= EAR_HIGH
 
 
-def _delta_disgust_signal(d_lip_raise, d_mar, d_asym, d_smile):
+def _delta_disgust_signal(d_ear, d_brow, d_lip_raise, d_mar, d_smile):
     return (
+        d_ear < DELTA_EAR_LOW
+        and d_brow < DELTA_BROW_FURROWED
+        and
         d_lip_raise < -DELTA_LIP_RAISE_STRONG
-        and d_mar < DELTA_MAR_MOD
-        and d_asym < DELTA_ASYM_LOW
+        and DELTA_MAR_CLOSED < d_mar < DELTA_MAR_MOD
         and d_smile < DELTA_SMILE_HIGH
     )
 
@@ -99,9 +106,9 @@ def _delta_angry_signal(d_ear, d_brow, d_mar, d_asym, d_smile, d_lip_raise):
         return False
     if d_lip_raise < -DELTA_LIP_RAISE:
         return False
-    brow_path = d_brow < DELTA_BROW_FURROWED and d_ear < DELTA_EAR_HIGH
-    eyes_path = d_ear < DELTA_EAR_TENSE and d_mar < DELTA_MAR_MOD and d_brow < DELTA_BROW_SAD
-    return brow_path or eyes_path
+    if d_mar >= DELTA_MAR_CLOSED:
+        return False
+    return d_brow < DELTA_BROW_FURROWED and DELTA_EAR_LOW <= d_ear <= DELTA_EAR_HIGH
 
 
 def _absolute_sad_signal(ear, smile, brow_dist, mouth_asym, upper_lip_raise):
@@ -124,6 +131,24 @@ def _delta_sad_signal(d_ear, d_smile, d_brow, d_asym, d_lip_raise):
     )
 
 
+def _absolute_fear_signal(ear, mar, smile, mouth_asym):
+    return (
+        ear > EAR_HIGH
+        and MAR_MODERATE < mar <= MAR_HIGH
+        and smile < SMILE_COEFF_HIGH
+        and mouth_asym < MOUTH_ASYM_HIGH
+    )
+
+
+def _delta_fear_signal(d_ear, d_mar, d_smile, d_asym):
+    return (
+        d_ear > DELTA_EAR_HIGH
+        and DELTA_MAR_MOD < d_mar <= DELTA_MAR_HIGH
+        and d_smile < DELTA_SMILE_HIGH
+        and d_asym < DELTA_ASYM_HIGH
+    )
+
+
 def _classify_absolute(params):
     ear = params["ear_avg"]
     mar = params["mar"]
@@ -136,6 +161,10 @@ def _classify_absolute(params):
     # Surprised: wide eyes + open mouth
     if ear > EAR_HIGH and mar > MAR_HIGH:
         return "Surprised"
+
+    # Fear: eyes are wide too, but the mouth is open less than in surprise.
+    if _absolute_fear_signal(ear, mar, smile, mouth_asym):
+        return "Fear"
 
     # Happy: elevated mouth corners, or wide mouth from smiling
     if smile > SMILE_COEFF_HIGH and (mar >= MAR_LOW or mouth_width > MOUTH_WIDTH_SMILE):
@@ -152,7 +181,7 @@ def _classify_absolute(params):
 
     # Disgust: primarily driven by upper-lip raise. Eye/brow tension can co-exist,
     # but lip raise must be the lead signal.
-    if _absolute_disgust_signal(upper_lip_raise, mar, mouth_asym, smile):
+    if _absolute_disgust_signal(ear, brow_dist, upper_lip_raise, mar, smile):
         return "Disgusted"
 
     # Angry: furrowed brows and/or tense eyes, but without the upper-lip raise
@@ -181,6 +210,10 @@ def _classify_delta(params, baseline):
     if d_ear > DELTA_EAR_HIGH and d_mar > DELTA_MAR_HIGH:
         return "Surprised"
 
+    # Fear: eyes widen, but the mouth opening stays below surprise.
+    if _delta_fear_signal(d_ear, d_mar, d_smile, d_asym):
+        return "Fear"
+
     # Happy: smile increase + (mouth opens a bit OR mouth widens)
     if d_smile > DELTA_SMILE_HIGH and (d_mar > DELTA_MAR_LOW or d_mw > DELTA_MW_SMILE):
         return "Happy"
@@ -196,7 +229,7 @@ def _classify_delta(params, baseline):
         return "Contempt"
 
     # Disgust: strong upper-lip raise is the primary cue.
-    if _delta_disgust_signal(d_lip_raise, d_mar, d_asym, d_smile):
+    if _delta_disgust_signal(d_ear, d_brow, d_lip_raise, d_mar, d_smile):
         return "Disgusted"
 
     # Angry: brows/eyes lead the decision, and strong lip raise blocks it so
