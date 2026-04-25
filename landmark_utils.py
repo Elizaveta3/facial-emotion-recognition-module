@@ -1,7 +1,5 @@
 import numpy as np
 
-# MediaPipe Face Mesh landmark indices
-
 RIGHT_EYE = [33, 160, 158, 133, 153, 144]
 LEFT_EYE = [362, 385, 387, 263, 373, 380]
 
@@ -27,7 +25,6 @@ FACE_RIGHT = 454
 FACE_TOP = 10
 FACE_BOTTOM = 152
 
-# Новые точки
 UPPER_LIP_TOP = 0
 NOSE_BASE = 2
 

@@ -1,6 +1,3 @@
-# Threshold constants — tune these to adjust sensitivity
-
-# ── Absolute thresholds ─────────────────────────────────────────────
 SMILE_COEFF_HIGH = 0.005
 SMILE_COEFF_NEGATIVE = -0.005
 SMILE_COEFF_SAD = -0.012
@@ -19,13 +16,11 @@ MOUTH_WIDTH_SMILE = 0.43
 BROW_DIST_FURROWED = 0.118
 BROW_DIST_RELAXED = 0.128
 
-# Emotion-specific metrics
-MOUTH_ASYM_HIGH = 0.013         # contempt should be visibly asymmetric
-MOUTH_ASYM_LOW = 0.009          # disgust / anger should stay comparatively symmetric
-UPPER_LIP_RAISE_DISGUST = 0.040  # smaller = upper lip pulled toward nose
+MOUTH_ASYM_HIGH = 0.013
+MOUTH_ASYM_LOW = 0.009
+UPPER_LIP_RAISE_DISGUST = 0.040
 UPPER_LIP_RAISE_BLOCK_ANGER = 0.050
 
-# ── Delta thresholds (relative to calibrated neutral) ──────────────
 DELTA_SMILE_HIGH = 0.006
 DELTA_SMILE_LOW = -0.006
 DELTA_SMILE_SAD = -0.003
@@ -59,11 +54,7 @@ EMOTIONS = (
 
 
 def classify_emotion(params, baseline=None):
-    """Rule-based emotion classification from facial parameters.
-
-    If baseline is provided, uses delta-from-neutral thresholds.
-    Otherwise falls back to absolute thresholds.
-    """
+    """Classifies emotion from facial parameters."""
     if baseline is None:
         return _classify_absolute(params)
     return _classify_delta(params, baseline)
@@ -154,19 +145,15 @@ def _classify_absolute(params):
     mouth_asym = params.get("mouth_asymmetry", 0.0)
     upper_lip_raise = params.get("upper_lip_raise", 0.0)
 
-    # Surprised: wide eyes + open mouth
     if ear > EAR_HIGH and mar > MAR_HIGH:
         return "Surprised"
 
-    # Fear: eyes are wide too, but the mouth is open less than in surprise.
     if _absolute_fear_signal(ear, mar, smile, mouth_asym):
         return "Fear"
 
-    # Happy: elevated mouth corners, or wide mouth from smiling
     if smile > SMILE_COEFF_HIGH and (mar >= MAR_LOW or mouth_width > MOUTH_WIDTH_SMILE):
         return "Happy"
 
-    # Contempt: mouth asymmetry should dominate the decision.
     if (
         mouth_asym > MOUTH_ASYM_HIGH
         and mar < MAR_MODERATE
@@ -175,18 +162,12 @@ def _classify_absolute(params):
     ):
         return "Contempt"
 
-    # Disgust: primarily driven by upper-lip raise. Eye/brow tension can co-exist,
-    # but lip raise must be the lead signal.
     if _absolute_disgust_signal(ear, brow_dist, mar, smile):
         return "Disgusted"
 
-    # Angry: furrowed brows and/or tense eyes, but without the upper-lip raise
-    # signature of disgust.
     if _absolute_angry_signal(ear, brow_dist, mar, mouth_asym, smile, upper_lip_raise):
         return "Angry"
 
-    # Sad: downturned mouth with relaxed or slightly raised brows. Use a more
-    # conservative absolute smile threshold so neutral faces are not swallowed.
     if _absolute_sad_signal(ear, smile, brow_dist, mouth_asym, upper_lip_raise):
         return "Sad"
 
@@ -202,20 +183,15 @@ def _classify_delta(params, baseline):
     d_asym = params.get("mouth_asymmetry", 0.0) - baseline.get("mouth_asymmetry", 0.0)
     d_lip_raise = params.get("upper_lip_raise", 0.0) - baseline.get("upper_lip_raise", 0.0)
 
-    # Surprised: eyes wider than neutral + mouth opened wide
     if d_ear > DELTA_EAR_HIGH and d_mar > DELTA_MAR_HIGH:
         return "Surprised"
 
-    # Fear: eyes widen, but the mouth opening stays below surprise.
     if _delta_fear_signal(d_ear, d_mar, d_smile, d_asym):
         return "Fear"
 
-    # Happy: smile increase + (mouth opens a bit OR mouth widens)
     if d_smile > DELTA_SMILE_HIGH and (d_mar > DELTA_MAR_LOW or d_mw > DELTA_MW_SMILE):
         return "Happy"
 
-    # Contempt: asymmetric mouth movement should dominate while the mouth stays
-    # fairly closed and the upper lip does not strongly lift.
     if (
         d_asym > DELTA_ASYM_HIGH
         and d_mar < DELTA_MAR_MOD
@@ -224,18 +200,12 @@ def _classify_delta(params, baseline):
     ):
         return "Contempt"
 
-    # Disgust: strong upper-lip raise is the primary cue.
     if _delta_disgust_signal(d_ear, d_brow, d_mar, d_smile):
         return "Disgusted"
 
-    # Angry: brows/eyes lead the decision, and strong lip raise blocks it so
-    # disgust wins when both share some facial tension.
     if _delta_angry_signal(d_ear, d_brow, d_mar, d_asym, d_smile, d_lip_raise):
         return "Angry"
 
-    # Sad: mouth corners drop below the user's neutral baseline while brows stay
-    # relaxed. This is intentionally softer than the absolute rule because
-    # downturned neutral mouths are common.
     if _delta_sad_signal(d_ear, d_smile, d_brow, d_asym, d_lip_raise):
         return "Sad"
 
