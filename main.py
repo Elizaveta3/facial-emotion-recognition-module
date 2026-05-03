@@ -1,234 +1,471 @@
-import csv
-import json
-import os
-import time
+import tkinter as tk
+from tkinter import messagebox
 
-import cv2
-import mediapipe as mp
-import numpy as np
-
-from landmark_utils import extract_all_parameters, landmarks_to_list
-from emotion_classifier import classify_emotion
-from calibration import BaselineCalibrator
-from smoothing import ParameterSmoother
-
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "face_landmarker.task")
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
-
-CSV_FIELDS = [
-    "frame", "timestamp", "emotion",
-    "ear_avg_raw", "mar_raw", "smile_coeff_raw", "mouth_width_raw", "brow_dist_raw", "mouth_asymmetry_raw", "upper_lip_raise_raw",
-    "ear_avg_smooth", "mar_smooth", "smile_coeff_smooth", "mouth_width_smooth", "brow_dist_smooth", "mouth_asymmetry_smooth", "upper_lip_raise_smooth",
-]
-
-SCALAR_KEYS = ["ear_avg", "mar", "smile_coeff", "mouth_width", "brow_dist", "mouth_asymmetry", "upper_lip_raise"]
+from auth_db import (
+    InvalidCredentialsError,
+    UserAlreadyExistsError,
+    authenticate_user,
+    create_user,
+    get_user,
+    init_db,
+    update_face_coordinates,
+)
+from recognition import (
+    CameraUnavailableError,
+    FaceNotFoundError,
+    capture_face_profile,
+    parse_face_profile,
+    run_emotion_recognition,
+    serialize_face_profile,
+)
 
 
-def run_calibration(cap, landmarker, calibrator):
-    """Runs neutral-face calibration."""
-    print("CALIBRATION: Keep a neutral face for ~3 seconds...")
+class EmotionRecognitionApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        init_db()
+        self.title("Розпізнавання емоцій")
+        self.geometry("1180x760")
+        self.minsize(900, 620)
+        self.configure(bg="#eef3f8")
+        self.current_user = None
+        self.current_frame = None
+        self._configure_theme()
+        self.attributes("-fullscreen", True)
+        self.bind("<F11>", self.toggle_fullscreen)
+        self.bind("<Control-q>", lambda event: self.shutdown())
+        self.show_home()
 
-    while not calibrator.is_complete():
-        ret, frame = cap.read()
-        if not ret:
-            break
+    def _configure_theme(self):
+        self.colors = {
+            "bg": "#eef3f8",
+            "panel": "#ffffff",
+            "surface": "#f8fafc",
+            "text": "#142033",
+            "muted": "#667085",
+            "primary": "#0f766e",
+            "primary_hover": "#115e59",
+            "secondary": "#e7edf4",
+            "secondary_hover": "#d6e0ea",
+            "danger": "#b42318",
+            "border": "#b8c4d3",
+            "field": "#ffffff",
+            "field_focus": "#0f766e",
+            "accent": "#164e63",
+        }
 
-        frame = cv2.flip(frame, 1)
-        h, w, _ = frame.shape
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    def toggle_fullscreen(self, event=None):
+        self.attributes("-fullscreen", not self.attributes("-fullscreen"))
 
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        timestamp_ms = int(time.time() * 1000)
-        results = landmarker.detect_for_video(mp_image, timestamp_ms)
+    def shutdown(self):
+        self.destroy()
 
-        progress = calibrator.get_progress()
+    def _set_screen(self, builder):
+        if self.current_frame is not None:
+            self.current_frame.destroy()
+        frame = tk.Frame(self, bg=self.colors["bg"])
+        frame.pack(fill="both", expand=True)
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(1, weight=1)
+        self.current_frame = frame
+        self._topbar(frame)
+        builder(frame)
 
-        cv2.putText(frame, "CALIBRATION — keep a neutral face",
-                    (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+    def _topbar(self, parent):
+        bar = tk.Frame(parent, bg=self.colors["accent"], height=72)
+        bar.grid(row=0, column=0, sticky="ew")
+        bar.columnconfigure(0, weight=1)
 
-        bar_x, bar_y, bar_w, bar_h = 30, 70, w - 60, 25
-        cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h),
-                      (255, 255, 255), 2)
-        fill_w = int(bar_w * progress / 100)
-        cv2.rectangle(frame, (bar_x, bar_y), (bar_x + fill_w, bar_y + bar_h),
-                      (0, 255, 0), -1)
-        cv2.putText(frame, f"{progress}%", (bar_x + bar_w // 2 - 20, bar_y + 18),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+        title = tk.Label(
+            bar,
+            text="Розпізнавання емоцій",
+            bg=self.colors["accent"],
+            fg="#ffffff",
+            font=("Arial", 16, "bold"),
+        )
+        title.grid(row=0, column=0, sticky="w", padx=28, pady=20)
 
-        if not results.face_landmarks:
-            cv2.putText(frame, "No face detected — move into frame",
-                        (30, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        controls = tk.Frame(bar, bg=self.colors["accent"])
+        controls.grid(row=0, column=1, sticky="e", padx=18, pady=14)
+        tk.Button(
+            controls,
+            text="Выйти",
+            command=self.shutdown,
+            bg=self.colors["accent"],
+            fg=self.colors["danger"],
+            activebackground=self.colors["accent"],
+            activeforeground=self.colors["danger"],
+            relief="solid",
+            bd=2,
+            highlightthickness=0,
+            takefocus=0,
+            padx=16,
+            pady=8,
+            font=("Arial", 11, "bold"),
+            cursor="hand2",
+        ).grid(row=0, column=0)
+
+    def _content_area(self, parent):
+        area = tk.Frame(parent, bg=self.colors["bg"])
+        area.grid(row=1, column=0, sticky="nsew", padx=34, pady=30)
+        area.columnconfigure(0, weight=1)
+        area.columnconfigure(1, weight=0)
+        area.columnconfigure(2, weight=1)
+        area.rowconfigure(0, weight=1)
+        return area
+
+    def _center_panel(self, parent, max_width=760):
+        area = self._content_area(parent)
+        panel_width = min(max_width, max(560, self.winfo_screenwidth() - 120))
+        panel = tk.Frame(
+            area,
+            bg=self.colors["panel"],
+            highlightbackground=self.colors["border"],
+            highlightthickness=1,
+        )
+        panel.grid(row=0, column=1, sticky="nsew")
+        area.grid_columnconfigure(1, weight=0, minsize=panel_width)
+        panel.columnconfigure(0, weight=1)
+        panel.rowconfigure(0, weight=1)
+        return panel
+
+    def _label(self, parent, text, size=13, weight="normal", color=None, justify="center"):
+        return tk.Label(
+            parent,
+            text=text,
+            bg=parent["bg"],
+            fg=color or self.colors["text"],
+            font=("Arial", size, weight),
+            wraplength=680,
+            justify=justify,
+        )
+
+    def _button(self, parent, text, command, primary=True, danger=False, outline=False, text_color=None):
+        if danger:
+            fg = text_color or self.colors["danger"]
+            bg = parent["bg"] if outline else self.colors["danger"]
+            border = self.colors["danger"] if outline else self.colors["danger"]
+            relief = "solid" if outline else "flat"
+            bd = 2 if outline else 0
         else:
-            face_lms = results.face_landmarks[0]
-            landmarks_2d = np.array([[lm.x * w, lm.y * h] for lm in face_lms])
-            params = extract_all_parameters(landmarks_2d)
-            calibrator.add_frame(params)
+            bg = self.colors["primary"] if primary else self.colors["secondary"]
+            fg = text_color or ("#ffffff" if primary else self.colors["text"])
+            border = self.colors["primary"] if outline else bg
+            relief = "solid" if outline else "flat"
+            bd = 2 if outline else 0
+            if outline:
+                bg = parent["bg"]
+        return tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bg=bg,
+            fg=fg,
+            activebackground=bg,
+            activeforeground=fg,
+            disabledforeground=fg,
+            relief=relief,
+            bd=bd,
+            highlightthickness=0,
+            highlightbackground=border,
+            takefocus=0,
+            padx=28,
+            pady=14,
+            font=("Arial", 13, "bold"),
+            cursor="hand2",
+        )
 
-        cv2.imshow("Facial Emotion Recognition", frame)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            print("Calibration cancelled by user.")
-            return None
+    def _entry(self, parent, show=None):
+        wrapper = tk.Frame(
+            parent,
+            bg=self.colors["field"],
+            highlightbackground=self.colors["border"],
+            highlightcolor=self.colors["field_focus"],
+            highlightthickness=2,
+        )
+        entry = tk.Entry(
+            wrapper,
+            show=show,
+            font=("Arial", 15),
+            relief="flat",
+            bd=0,
+            bg=self.colors["field"],
+            fg=self.colors["text"],
+            insertbackground=self.colors["primary"],
+        )
+        entry.pack(fill="x", ipady=12, padx=14, pady=3)
+        return wrapper, entry
 
-    if not calibrator.frames:
-        print("Calibration failed — no face was detected.")
-        return None
+    def _link_button(self, parent, text, command):
+        return tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bg=parent["bg"],
+            fg=self.colors["muted"],
+            activebackground=parent["bg"],
+            activeforeground=self.colors["muted"],
+            relief="flat",
+            takefocus=0,
+            font=("Arial", 12, "bold"),
+            cursor="hand2",
+        )
 
-    baseline = calibrator.compute_baseline()
-    print("CALIBRATION COMPLETE — baseline values:")
-    for k, v in baseline.items():
-        print(f"  {k}: {v:.5f}")
-    return baseline
+    def _validate_required_fields(self, username_entry, password_entry, error_label):
+        username = username_entry.get().strip()
+        password = password_entry.get()
+        if not username and not password:
+            error_label.config(text="Заповніть логін і пароль.")
+            username_entry.focus_set()
+            return False
+        if not username:
+            error_label.config(text="Поле «Логін» обов'язкове.")
+            username_entry.focus_set()
+            return False
+        if not password:
+            error_label.config(text="Поле «Пароль» обов'язкове.")
+            password_entry.focus_set()
+            return False
+        error_label.config(text="")
+        return True
+
+    def show_home(self):
+        self.current_user = None
+
+        def build(frame):
+            panel = self._center_panel(frame, max_width=980)
+            content = tk.Frame(panel, bg=self.colors["panel"])
+            content.grid(row=0, column=0, sticky="nsew", padx=56, pady=52)
+            content.columnconfigure(0, weight=1)
+
+
+            self._label(content, "Система розпізнавання емоцій", 32, "bold").grid(row=1, column=0, pady=(0, 18))
+            self._label(
+                content,
+                "Розпізнавання емоцій у реальному часі за точками обличчя MediaPipe. "
+                "Можна швидко спробувати систему без збереження даних або увійти в акаунт "
+                "для використання збережених координат обличчя.",
+                15,
+                color=self.colors["muted"],
+            ).grid(row=2, column=0, pady=(0, 40), sticky="ew")
+
+            actions = tk.Frame(content, bg=self.colors["panel"])
+            actions.grid(row=3, column=0, pady=(0, 22))
+            self._button(actions, "Спробувати", self.start_try_mode, True, text_color="#000000").grid(row=0, column=0, padx=10, sticky="ew")
+            self._button(actions, "Авторизуватися", self.show_login, False, text_color="#000000").grid(row=0, column=1, padx=10, sticky="ew")
+            self._button(content, "Выйти", self.shutdown, False, danger=True, outline=True).grid(row=4, column=0, pady=(6, 0))
+
+        self._set_screen(build)
+
+    def show_login(self):
+        def build(frame):
+            panel = self._center_panel(frame, max_width=620)
+            content = tk.Frame(panel, bg=self.colors["panel"])
+            content.grid(row=0, column=0, sticky="nsew", padx=54, pady=46)
+            content.columnconfigure(0, weight=1)
+
+            self._label(content, "Вхід", 28, "bold").grid(row=0, column=0, pady=(10, 28), sticky="ew")
+
+            tk.Label(content, text="Логін", bg=self.colors["panel"], fg=self.colors["text"],
+                     font=("Arial", 13, "bold")).grid(row=1, column=0, sticky="w")
+            username_box, username_entry = self._entry(content)
+            username_box.grid(row=2, column=0, sticky="ew", pady=(8, 18))
+
+            tk.Label(content, text="Пароль", bg=self.colors["panel"], fg=self.colors["text"],
+                     font=("Arial", 13, "bold")).grid(row=3, column=0, sticky="w")
+            password_box, password_entry = self._entry(content, show="*")
+            password_box.grid(row=4, column=0, sticky="ew", pady=(8, 22))
+
+            error_label = tk.Label(content, text="", bg=self.colors["panel"], fg=self.colors["danger"],
+                                   font=("Arial", 12, "bold"))
+            error_label.grid(row=5, column=0, pady=(0, 14), sticky="ew")
+
+            def submit():
+                if not self._validate_required_fields(username_entry, password_entry, error_label):
+                    return
+                try:
+                    self.current_user = authenticate_user(username_entry.get(), password_entry.get())
+                    self.show_dashboard()
+                except InvalidCredentialsError as exc:
+                    error_label.config(text=str(exc))
+
+            username_entry.focus_set()
+            username_entry.bind("<Return>", lambda event: password_entry.focus_set())
+            password_entry.bind("<Return>", lambda event: submit())
+            self._button(content, "Увійти", submit, True, text_color="#000000").grid(row=6, column=0, sticky="ew", pady=(0, 12))
+            self._button(content, "Зареєструватися", self.show_register, False, outline=True, text_color="#000000").grid(row=7, column=0, sticky="ew")
+            self._link_button(content, "Назад", self.show_home).grid(row=8, column=0, pady=(18, 0))
+
+        self._set_screen(build)
+
+    def show_register(self):
+        def build(frame):
+            panel = self._center_panel(frame, max_width=620)
+            content = tk.Frame(panel, bg=self.colors["panel"])
+            content.grid(row=0, column=0, sticky="nsew", padx=54, pady=46)
+            content.columnconfigure(0, weight=1)
+
+            self._label(content, "Реєстрація", 28, "bold").grid(row=0, column=0, pady=(10, 28), sticky="ew")
+
+            tk.Label(content, text="Логін", bg=self.colors["panel"], fg=self.colors["text"],
+                     font=("Arial", 13, "bold")).grid(row=1, column=0, sticky="w")
+            username_box, username_entry = self._entry(content)
+            username_box.grid(row=2, column=0, sticky="ew", pady=(8, 18))
+
+            tk.Label(content, text="Пароль", bg=self.colors["panel"], fg=self.colors["text"],
+                     font=("Arial", 13, "bold")).grid(row=3, column=0, sticky="w")
+            password_box, password_entry = self._entry(content, show="*")
+            password_box.grid(row=4, column=0, sticky="ew", pady=(8, 22))
+
+            error_label = tk.Label(content, text="", bg=self.colors["panel"], fg=self.colors["danger"],
+                                   font=("Arial", 12, "bold"))
+            error_label.grid(row=5, column=0, pady=(0, 14), sticky="ew")
+
+            def submit():
+                if not self._validate_required_fields(username_entry, password_entry, error_label):
+                    return
+                try:
+                    self.current_user = create_user(username_entry.get(), password_entry.get())
+                    self.show_dashboard()
+                except (UserAlreadyExistsError, ValueError) as exc:
+                    error_label.config(text=str(exc))
+
+            username_entry.focus_set()
+            username_entry.bind("<Return>", lambda event: password_entry.focus_set())
+            password_entry.bind("<Return>", lambda event: submit())
+            self._button(content, "Створити акаунт", submit, True).grid(row=6, column=0, sticky="ew", pady=(0, 12))
+            self._button(content, "Уже є акаунт", self.show_login, False, outline=True).grid(row=7, column=0, sticky="ew")
+            self._link_button(content, "Назад", self.show_home).grid(row=8, column=0, pady=(18, 0))
+
+        self._set_screen(build)
+
+    def show_dashboard(self):
+        if self.current_user is None:
+            self.show_home()
+            return
+
+        def build(frame):
+            panel = self._center_panel(frame, max_width=800)
+            content = tk.Frame(panel, bg=self.colors["panel"])
+            content.grid(row=0, column=0, sticky="nsew", padx=54, pady=52)
+            content.columnconfigure(0, weight=1)
+
+            self._label(content, f"Акаунт: {self.current_user['username']}", 28, "bold").grid(row=0, column=0, pady=(22, 18))
+
+            has_face = bool(self.current_user.get("face_coordinates"))
+            status = (
+                "Координати обличчя вже збережені. Повторне зчитування не потрібне."
+                if has_face else
+                "Координати обличчя ще не збережені. Під час першого запуску система зчитає обличчя через камеру."
+            )
+            status_card = tk.Frame(content, bg=self.colors["surface"], highlightbackground=self.colors["border"], highlightthickness=1)
+            status_card.grid(row=1, column=0, sticky="ew", pady=(0, 32))
+            self._label(status_card, status, 14, color=self.colors["muted"]).pack(fill="x", padx=24, pady=22)
+
+            self._button(content, "Запустити розпізнавання", self.start_authorized_mode, True, text_color="#000000").grid(row=2, column=0, sticky="ew", pady=(0, 14))
+            self._button(content, "Повторне зчитування", self.recapture_face_profile, False, outline=True, text_color="#000000").grid(row=3, column=0, sticky="ew", pady=(0, 12))
+            self._button(content, "Вийти з акаунта", self.show_home, False, outline=True, text_color="#000000").grid(row=4, column=0, sticky="ew", pady=(0, 12))
+
+        self._set_screen(build)
+
+    def show_launching(self, text):
+        def build(frame):
+            panel = self._center_panel(frame, max_width=760)
+            content = tk.Frame(panel, bg=self.colors["panel"])
+            content.grid(row=0, column=0, sticky="nsew", padx=54, pady=52)
+            content.columnconfigure(0, weight=1)
+
+            self._label(content, text, 28, "bold").grid(row=0, column=0, pady=(110, 18))
+            self._label(
+                content,
+                "Відкриється вікно камери. Для завершення натисніть q або Esc у вікні розпізнавання.",
+                14,
+                color=self.colors["muted"],
+            ).grid(row=1, column=0, sticky="ew")
+
+        self._set_screen(build)
+
+    def start_try_mode(self):
+        self.show_launching("Запуск пробного режиму...")
+        self.after(
+            100,
+            lambda: self._run_busy(
+                lambda: run_emotion_recognition(save_outputs=False),
+                self.show_home,
+            ),
+        )
+
+    def _run_busy(self, action, on_done):
+        self.config(cursor="watch")
+        self.update_idletasks()
+        try:
+            action()
+        except CameraUnavailableError as exc:
+            messagebox.showerror("Помилка", str(exc))
+        except FaceNotFoundError as exc:
+            messagebox.showerror("Помилка", str(exc))
+        except Exception as exc:
+            messagebox.showerror("Помилка", f"Не вдалося запустити розпізнавання: {exc}")
+        finally:
+            self.config(cursor="")
+            on_done()
+
+    def start_authorized_mode(self):
+        if self.current_user is None:
+            self.show_home()
+            return
+
+        def action():
+            user = get_user(self.current_user["id"])
+            if user is None:
+                messagebox.showerror("Помилка", "Користувача не знайдено.")
+                return
+            face_profile = parse_face_profile(user.get("face_coordinates"))
+
+            if face_profile is None:
+                face_profile = capture_face_profile()
+                update_face_coordinates(
+                    user["id"],
+                    serialize_face_profile(face_profile),
+                )
+                user = get_user(user["id"])
+
+            self.current_user = user
+            run_emotion_recognition(
+                face_profile=face_profile,
+                save_outputs=True,
+                session_owner=self.current_user["username"],
+            )
+
+        self.show_launching("Запуск розпізнавання...")
+        self.after(100, lambda: self._run_busy(action, self.show_dashboard))
+
+    def recapture_face_profile(self):
+        if self.current_user is None:
+            self.show_home()
+            return
+
+        def action():
+            user = get_user(self.current_user["id"])
+            if user is None:
+                messagebox.showerror("Помилка", "Користувача не знайдено.")
+                return
+
+            face_profile = capture_face_profile()
+            update_face_coordinates(
+                user["id"],
+                serialize_face_profile(face_profile),
+            )
+            self.current_user = get_user(user["id"])
+            messagebox.showinfo("Готово", "Координати обличчя оновлено.")
+
+        self.show_launching("Повторне зчитування обличчя...")
+        self.after(100, lambda: self._run_busy(action, self.show_dashboard))
 
 
 def main():
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("Error: Cannot open webcam")
-        return
-
-    BaseOptions = mp.tasks.BaseOptions
-    FaceLandmarker = mp.tasks.vision.FaceLandmarker
-    FaceLandmarkerOptions = mp.tasks.vision.FaceLandmarkerOptions
-    RunningMode = mp.tasks.vision.RunningMode
-
-    options = FaceLandmarkerOptions(
-        base_options=BaseOptions(model_asset_path=MODEL_PATH),
-        running_mode=RunningMode.VIDEO,
-        num_faces=1,
-        min_face_detection_confidence=0.5,
-        min_face_presence_confidence=0.5,
-        min_tracking_confidence=0.5,
-    )
-
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    session_id = time.strftime("%Y%m%d_%H%M%S")
-    csv_path  = os.path.join(OUTPUT_DIR, f"session_{session_id}.csv")
-    json_path = os.path.join(OUTPUT_DIR, f"session_{session_id}.json")
-
-    json_records = []
-    frame_count = 0
-
-    smoother = ParameterSmoother(alpha=0.3)
-
-    csv_file   = open(csv_path, "w", newline="")
-    csv_writer = csv.DictWriter(csv_file, fieldnames=CSV_FIELDS)
-    csv_writer.writeheader()
-
-    with FaceLandmarker.create_from_options(options) as landmarker:
-        calibrator = BaselineCalibrator(num_frames=90)
-        baseline   = run_calibration(cap, landmarker, calibrator)
-
-        if baseline is not None:
-            mode = "CALIBRATED"
-        else:
-            mode     = "ABSOLUTE"
-            baseline = None
-        print(f"Running in [{mode}] mode.\n")
-
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            frame = cv2.flip(frame, 1)
-            h, w, _ = frame.shape
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-            mp_image  = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-            timestamp_ms = int(time.time() * 1000)
-
-            results = landmarker.detect_for_video(mp_image, timestamp_ms)
-
-            if not results.face_landmarks:
-                cv2.putText(frame, "No face detected", (30, 40),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-            else:
-                face_lms = results.face_landmarks[0]
-
-                # Keep z in the same scale as x.
-                landmarks_3d = np.array([
-                    [lm.x * w, lm.y * h, lm.z * w]
-                    for lm in face_lms
-                ])
-
-                for x, y, *_ in landmarks_3d.astype(int):
-                    cv2.circle(frame, (x, y), 1, (0, 255, 0), -1)
-
-                raw_params = extract_all_parameters(landmarks_3d)
-                smoothed   = smoother.update(raw_params)
-                emotion    = classify_emotion(smoothed, baseline)
-
-                frame_count += 1
-                if frame_count % 30 == 0:
-                    print(f"[{mode}] [{emotion:>10s}]  EAR={smoothed['ear_avg']:.3f}  "
-                          f"MAR={smoothed['mar']:.3f}  Smile={smoothed['smile_coeff']:.4f}  "
-                          f"MouthW={smoothed['mouth_width']:.3f}  BrowD={smoothed['brow_dist']:.4f}  "
-                          f"Asym={smoothed['mouth_asymmetry']:.4f}  LipRaise={smoothed['upper_lip_raise']:.3f}")
-
-                record = {
-                    "frame":     frame_count,
-                    "timestamp": timestamp_ms,
-                    "emotion":   emotion,
-                }
-                for k in SCALAR_KEYS:
-                    record[f"{k}_raw"]    = round(raw_params[k], 5)
-                    record[f"{k}_smooth"] = round(smoothed[k], 5)
-
-                csv_writer.writerow(record)
-
-                json_record = dict(record)
-                json_record["landmarks_3d"] = landmarks_to_list(landmarks_3d)
-                json_records.append(json_record)
-                print("TOTAL JSON RECORDS:", len(json_records))
-
-                y_offset = 30
-                lines = [
-                    f"Emotion: {emotion}  [{mode}]",
-                    f"EAR: {smoothed['ear_avg']:.3f}",
-                    f"MAR: {smoothed['mar']:.3f}",
-                    f"Smile: {smoothed['smile_coeff']:.4f}",
-                    f"Mouth W: {smoothed['mouth_width']:.3f}",
-                    f"Brow D: {smoothed['brow_dist']:.4f}",
-                    f"Asym: {smoothed['mouth_asymmetry']:.4f}",
-                    f"LipRaise: {smoothed['upper_lip_raise']:.3f}",
-                ]
-                for i, line in enumerate(lines):
-                    color = (0, 255, 255) if i == 0 else (255, 255, 255)
-                    cv2.putText(frame, line, (10, y_offset + i * 30),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-
-            cv2.imshow("Facial Emotion Recognition", frame)
-            key = cv2.waitKey(10)
-
-            if key & 0xFF == ord("q") or key == 27:
-                break
-
-    csv_file.close()
-
-    calibration_enabled = mode == "CALIBRATED"
-    json_output = {
-        "session": session_id,
-        "calibration": {
-            "enabled":  calibration_enabled,
-            "baseline": baseline,
-        },
-        "smoothing": {
-            "enabled": True,
-            "alpha":   smoother.alpha,
-        },
-        "landmarks_schema": {
-            "format":      "[x_px, y_px, z_px]",
-            "count":       478,
-            "z_reference": "face_centre_depth_same_scale_as_x",
-        },
-        "frames": json_records,
-    }
-    with open(json_path, "w") as f:
-        json.dump(json_output, f, indent=2)
-
-    cap.release()
-    cv2.destroyAllWindows()
-    print(f"\nResults saved to:\n  CSV:  {csv_path}\n  JSON: {json_path}")
+    app = EmotionRecognitionApp()
+    app.mainloop()
 
 
 if __name__ == "__main__":
