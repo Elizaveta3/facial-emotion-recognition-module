@@ -35,6 +35,7 @@ class EmotionRecognitionApp(tk.Tk):
         self.bind("<F11>", self.toggle_fullscreen)
         self.bind("<Control-q>", lambda event: self.shutdown())
         self.show_home()
+        self.after(150, self._activate_window)
 
     def _configure_theme(self):
         self.colors = {
@@ -60,6 +61,11 @@ class EmotionRecognitionApp(tk.Tk):
     def shutdown(self):
         self.destroy()
 
+    def _activate_window(self):
+        self.lift()
+        if self.focus_displayof() is None:
+            self.focus_force()
+
     def _set_screen(self, builder):
         if self.current_frame is not None:
             self.current_frame.destroy()
@@ -70,6 +76,7 @@ class EmotionRecognitionApp(tk.Tk):
         self.current_frame = frame
         self._topbar(frame)
         builder(frame)
+        self.after_idle(self._activate_window)
 
     def _topbar(self, parent):
         bar = tk.Frame(parent, bg=self.colors["accent"], height=72)
@@ -78,7 +85,7 @@ class EmotionRecognitionApp(tk.Tk):
 
         title = tk.Label(
             bar,
-            text="Розпізнавання емоцій",
+            text="Програмний модуль аналізу міміки обличчя та класифікації емоцій",
             bg=self.colors["accent"],
             fg="#ffffff",
             font=("Arial", 16, "bold"),
@@ -87,22 +94,13 @@ class EmotionRecognitionApp(tk.Tk):
 
         controls = tk.Frame(bar, bg=self.colors["accent"])
         controls.grid(row=0, column=1, sticky="e", padx=18, pady=14)
-        tk.Button(
+        self._button(
             controls,
-            text="Выйти",
+            text="Вийти",
             command=self.shutdown,
-            bg=self.colors["accent"],
-            fg=self.colors["danger"],
-            activebackground=self.colors["accent"],
-            activeforeground=self.colors["danger"],
-            relief="solid",
-            bd=2,
-            highlightthickness=0,
-            takefocus=0,
-            padx=16,
-            pady=8,
-            font=("Arial", 11, "bold"),
-            cursor="hand2",
+            danger=True,
+            outline=True,
+            compact=True,
         ).grid(row=0, column=0)
 
     def _content_area(self, parent):
@@ -140,11 +138,12 @@ class EmotionRecognitionApp(tk.Tk):
             justify=justify,
         )
 
-    def _button(self, parent, text, command, primary=True, danger=False, outline=False, text_color=None):
+
+    def _button(self, parent, text, command, primary=True, danger=False, outline=False, text_color=None, compact=False):
         if danger:
             fg = text_color or self.colors["danger"]
             bg = parent["bg"] if outline else self.colors["danger"]
-            border = self.colors["danger"] if outline else self.colors["danger"]
+            border = self.colors["danger"]
             relief = "solid" if outline else "flat"
             bd = 2 if outline else 0
         else:
@@ -153,8 +152,10 @@ class EmotionRecognitionApp(tk.Tk):
             border = self.colors["primary"] if outline else bg
             relief = "solid" if outline else "flat"
             bd = 2 if outline else 0
+
             if outline:
                 bg = parent["bg"]
+
         return tk.Button(
             parent,
             text=text,
@@ -163,39 +164,25 @@ class EmotionRecognitionApp(tk.Tk):
             fg=fg,
             activebackground=bg,
             activeforeground=fg,
-            disabledforeground=fg,
             relief=relief,
             bd=bd,
             highlightthickness=0,
             highlightbackground=border,
-            takefocus=0,
-            padx=28,
-            pady=14,
-            font=("Arial", 13, "bold"),
+            padx=16 if compact else 28,
+            pady=8 if compact else 14,
+            font=("Arial", 11 if compact else 13, "bold"),
             cursor="hand2",
         )
 
     def _entry(self, parent, show=None):
-        wrapper = tk.Frame(
-            parent,
-            bg=self.colors["field"],
-            highlightbackground=self.colors["border"],
-            highlightcolor=self.colors["field_focus"],
-            highlightthickness=2,
-        )
         entry = tk.Entry(
-            wrapper,
+            parent,
             show=show,
             font=("Arial", 15),
-            relief="flat",
-            bd=0,
-            bg=self.colors["field"],
-            fg=self.colors["text"],
-            insertbackground=self.colors["primary"],
+            relief="solid",
+            bd=1,
         )
-        entry.pack(fill="x", ipady=12, padx=14, pady=3)
-        return wrapper, entry
-
+        return entry
     def _link_button(self, parent, text, command):
         return tk.Button(
             parent,
@@ -242,7 +229,6 @@ class EmotionRecognitionApp(tk.Tk):
             self._label(content, "Система розпізнавання емоцій", 32, "bold").grid(row=1, column=0, pady=(0, 18))
             self._label(
                 content,
-                "Розпізнавання емоцій у реальному часі за точками обличчя MediaPipe. "
                 "Можна швидко спробувати систему без збереження даних або увійти в акаунт "
                 "для використання збережених координат обличчя.",
                 15,
@@ -253,7 +239,7 @@ class EmotionRecognitionApp(tk.Tk):
             actions.grid(row=3, column=0, pady=(0, 22))
             self._button(actions, "Спробувати", self.start_try_mode, True, text_color="#000000").grid(row=0, column=0, padx=10, sticky="ew")
             self._button(actions, "Авторизуватися", self.show_login, False, text_color="#000000").grid(row=0, column=1, padx=10, sticky="ew")
-            self._button(content, "Выйти", self.shutdown, False, danger=True, outline=True).grid(row=4, column=0, pady=(6, 0))
+            self._button(content, "Вийти", self.shutdown, False, danger=True, outline=True).grid(row=4, column=0, pady=(6, 0))
 
         self._set_screen(build)
 
@@ -266,18 +252,35 @@ class EmotionRecognitionApp(tk.Tk):
 
             self._label(content, "Вхід", 28, "bold").grid(row=0, column=0, pady=(10, 28), sticky="ew")
 
-            tk.Label(content, text="Логін", bg=self.colors["panel"], fg=self.colors["text"],
-                     font=("Arial", 13, "bold")).grid(row=1, column=0, sticky="w")
-            username_box, username_entry = self._entry(content)
-            username_box.grid(row=2, column=0, sticky="ew", pady=(8, 18))
+            tk.Label(
+                content,
+                text="Логін",
+                bg=self.colors["panel"],
+                fg=self.colors["text"],
+                font=("Arial", 13, "bold")
+            ).grid(row=1, column=0, sticky="w")
 
-            tk.Label(content, text="Пароль", bg=self.colors["panel"], fg=self.colors["text"],
-                     font=("Arial", 13, "bold")).grid(row=3, column=0, sticky="w")
-            password_box, password_entry = self._entry(content, show="*")
-            password_box.grid(row=4, column=0, sticky="ew", pady=(8, 22))
+            username_entry = self._entry(content)
+            username_entry.grid(row=2, column=0, sticky="ew", pady=(8, 18), ipady=8)
 
-            error_label = tk.Label(content, text="", bg=self.colors["panel"], fg=self.colors["danger"],
-                                   font=("Arial", 12, "bold"))
+            tk.Label(
+                content,
+                text="Пароль",
+                bg=self.colors["panel"],
+                fg=self.colors["text"],
+                font=("Arial", 13, "bold")
+            ).grid(row=3, column=0, sticky="w")
+
+            password_entry = self._entry(content, show="*")
+            password_entry.grid(row=4, column=0, sticky="ew", pady=(8, 22), ipady=8)
+
+            error_label = tk.Label(
+                content,
+                text="",
+                bg=self.colors["panel"],
+                fg=self.colors["danger"],
+                font=("Arial", 12, "bold")
+            )
             error_label.grid(row=5, column=0, pady=(0, 14), sticky="ew")
 
             def submit():
@@ -292,9 +295,26 @@ class EmotionRecognitionApp(tk.Tk):
             username_entry.focus_set()
             username_entry.bind("<Return>", lambda event: password_entry.focus_set())
             password_entry.bind("<Return>", lambda event: submit())
-            self._button(content, "Увійти", submit, True, text_color="#000000").grid(row=6, column=0, sticky="ew", pady=(0, 12))
-            self._button(content, "Зареєструватися", self.show_register, False, outline=True, text_color="#000000").grid(row=7, column=0, sticky="ew")
-            self._link_button(content, "Назад", self.show_home).grid(row=8, column=0, pady=(18, 0))
+
+            self._button(
+                content,
+                "Увійти",
+                submit,
+                True,
+                outline=True,
+                text_color="#000000"
+            ).grid(row=6, column=0, sticky="ew", pady=(0, 12))
+
+            self._button(
+                content,
+                "Зареєструватися",
+                self.show_register,
+                False,
+
+                text_color="#000000"
+            ).grid(row=7, column=0, sticky="ew")
+
+            self._button(content, "Назад", self.show_home, text_color="#000000").grid(row=8, column=0, pady=(18, 0))
 
         self._set_screen(build)
 
@@ -309,13 +329,15 @@ class EmotionRecognitionApp(tk.Tk):
 
             tk.Label(content, text="Логін", bg=self.colors["panel"], fg=self.colors["text"],
                      font=("Arial", 13, "bold")).grid(row=1, column=0, sticky="w")
-            username_box, username_entry = self._entry(content)
-            username_box.grid(row=2, column=0, sticky="ew", pady=(8, 18))
+
+            username_entry = self._entry(content)
+            username_entry.grid(row=2, column=0, sticky="ew", pady=(8, 18), ipady=8)
 
             tk.Label(content, text="Пароль", bg=self.colors["panel"], fg=self.colors["text"],
                      font=("Arial", 13, "bold")).grid(row=3, column=0, sticky="w")
-            password_box, password_entry = self._entry(content, show="*")
-            password_box.grid(row=4, column=0, sticky="ew", pady=(8, 22))
+
+            password_entry = self._entry(content, show="*")
+            password_entry.grid(row=4, column=0, sticky="ew", pady=(8, 22), ipady=8)
 
             error_label = tk.Label(content, text="", bg=self.colors["panel"], fg=self.colors["danger"],
                                    font=("Arial", 12, "bold"))
@@ -333,9 +355,16 @@ class EmotionRecognitionApp(tk.Tk):
             username_entry.focus_set()
             username_entry.bind("<Return>", lambda event: password_entry.focus_set())
             password_entry.bind("<Return>", lambda event: submit())
-            self._button(content, "Створити акаунт", submit, True).grid(row=6, column=0, sticky="ew", pady=(0, 12))
-            self._button(content, "Уже є акаунт", self.show_login, False, outline=True).grid(row=7, column=0, sticky="ew")
-            self._link_button(content, "Назад", self.show_home).grid(row=8, column=0, pady=(18, 0))
+
+            self._button(content, "Створити акаунт", submit, True, text_color="#000000", outline=True,).grid(
+                row=6, column=0, sticky="ew", pady=(0, 12)
+            )
+
+            self._button(content, "Вже є акаунт", self.show_login, False).grid(
+                row=7, column=0, sticky="ew"
+            )
+
+            self._button(content, "Назад", self.show_home, text_color="#000000").grid(row=8, column=0, pady=(18, 0))
 
         self._set_screen(build)
 
