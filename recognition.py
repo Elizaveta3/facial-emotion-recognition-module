@@ -113,7 +113,6 @@ def run_calibration(cap, landmarker, calibrator, return_face_coordinates=False):
 
 
 def capture_face_profile(num_frames=90):
-    """Captures one user face profile for storing in SQLite."""
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         raise CameraUnavailableError("Camera is unavailable.")

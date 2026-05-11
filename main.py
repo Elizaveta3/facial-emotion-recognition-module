@@ -26,7 +26,7 @@ class EmotionRecognitionApp(tk.Tk):
         init_db()
         self.title("Emotion Recognition")
         self.geometry("1180x760")
-        self.minsize(900, 620)
+        self.minsize(520, 560)
         self.configure(bg="#eef3f8")
         self.current_user = None
         self.current_frame = None
@@ -88,9 +88,11 @@ class EmotionRecognitionApp(tk.Tk):
             text="Facial Expression Analysis and Emotion Classification Module",
             bg=self.colors["accent"],
             fg="#ffffff",
-            font=("Arial", 16, "bold"),
+            font=("Arial", 13 if self._is_compact() else 16, "bold"),
+            wraplength=max(260, self._viewport_width() - 170),
+            justify="left",
         )
-        title.grid(row=0, column=0, sticky="w", padx=28, pady=20)
+        title.grid(row=0, column=0, sticky="w", padx=(18, 10), pady=16)
 
         controls = tk.Frame(bar, bg=self.colors["accent"])
         controls.grid(row=0, column=1, sticky="e", padx=18, pady=14)
@@ -103,43 +105,93 @@ class EmotionRecognitionApp(tk.Tk):
             compact=True,
         ).grid(row=0, column=0)
 
+    def _viewport_width(self):
+        width = self.winfo_width()
+        return width if width > 1 else self.winfo_screenwidth()
+
+    def _is_compact(self):
+        return self._viewport_width() < 760
+
+    def _responsive_spacing(self):
+        if self._viewport_width() < 640:
+            return {
+                "outer_x": 12,
+                "outer_y": 14,
+                "inner_x": 22,
+                "inner_y": 26,
+                "button_pad_x": 14,
+            }
+        if self._viewport_width() < 900:
+            return {
+                "outer_x": 22,
+                "outer_y": 22,
+                "inner_x": 36,
+                "inner_y": 36,
+                "button_pad_x": 20,
+            }
+        return {
+            "outer_x": 34,
+            "outer_y": 30,
+            "inner_x": 54,
+            "inner_y": 46,
+            "button_pad_x": 28,
+        }
+
     def _content_area(self, parent):
+        spacing = self._responsive_spacing()
         area = tk.Frame(parent, bg=self.colors["bg"])
-        area.grid(row=1, column=0, sticky="nsew", padx=34, pady=30)
+        area.grid(
+            row=1,
+            column=0,
+            sticky="nsew",
+            padx=spacing["outer_x"],
+            pady=spacing["outer_y"],
+        )
         area.columnconfigure(0, weight=1)
         area.columnconfigure(1, weight=0)
         area.columnconfigure(2, weight=1)
         area.rowconfigure(0, weight=1)
+        area.rowconfigure(1, weight=0)
+        area.rowconfigure(2, weight=1)
         return area
 
     def _center_panel(self, parent, max_width=760):
         area = self._content_area(parent)
-        panel_width = min(max_width, max(560, self.winfo_screenwidth() - 120))
+        spacing = self._responsive_spacing()
+        panel_width = max(300, min(max_width, self._viewport_width() - (spacing["outer_x"] * 2)))
         panel = tk.Frame(
             area,
             bg=self.colors["panel"],
             highlightbackground=self.colors["border"],
             highlightthickness=1,
         )
-        panel.grid(row=0, column=1, sticky="nsew")
+        panel.grid(row=1, column=1, sticky="nsew")
         area.grid_columnconfigure(1, weight=0, minsize=panel_width)
         panel.columnconfigure(0, weight=1)
-        panel.rowconfigure(0, weight=1)
+
+        def resize_panel(event):
+            width = max(300, min(max_width, event.width - (spacing["outer_x"] * 2)))
+            area.grid_columnconfigure(1, minsize=width)
+
+        area.bind("<Configure>", resize_panel)
         return panel
 
     def _label(self, parent, text, size=13, weight="normal", color=None, justify="center"):
+        compact = self._is_compact()
         return tk.Label(
             parent,
             text=text,
             bg=parent["bg"],
             fg=color or self.colors["text"],
-            font=("Arial", size, weight),
-            wraplength=680,
+            font=("Arial", max(11, size - 4) if compact and size >= 20 else size, weight),
+            wraplength=max(250, min(680, self._viewport_width() - 90)),
             justify=justify,
         )
 
 
     def _button(self, parent, text, command, primary=True, danger=False, outline=False, text_color=None, compact=False):
+        compact = compact or self._is_compact()
+        spacing = self._responsive_spacing()
         if danger:
             fg = text_color or self.colors["danger"]
             bg = parent["bg"] if outline else self.colors["danger"]
@@ -168,7 +220,7 @@ class EmotionRecognitionApp(tk.Tk):
             bd=bd,
             highlightthickness=0,
             highlightbackground=border,
-            padx=16 if compact else 28,
+            padx=16 if compact else spacing["button_pad_x"],
             pady=8 if compact else 14,
             font=("Arial", 11 if compact else 13, "bold"),
             cursor="hand2",
@@ -178,11 +230,24 @@ class EmotionRecognitionApp(tk.Tk):
         entry = tk.Entry(
             parent,
             show=show,
-            font=("Arial", 15),
+            font=("Arial", 13 if self._is_compact() else 15),
             relief="solid",
             bd=1,
         )
         return entry
+
+    def _panel_content(self, panel):
+        spacing = self._responsive_spacing()
+        content = tk.Frame(panel, bg=self.colors["panel"])
+        content.grid(
+            row=0,
+            column=0,
+            sticky="nsew",
+            padx=spacing["inner_x"],
+            pady=spacing["inner_y"],
+        )
+        content.columnconfigure(0, weight=1)
+        return content
     def _link_button(self, parent, text, command):
         return tk.Button(
             parent,
@@ -221,9 +286,7 @@ class EmotionRecognitionApp(tk.Tk):
 
         def build(frame):
             panel = self._center_panel(frame, max_width=980)
-            content = tk.Frame(panel, bg=self.colors["panel"])
-            content.grid(row=0, column=0, sticky="nsew", padx=56, pady=52)
-            content.columnconfigure(0, weight=1)
+            content = self._panel_content(panel)
 
 
             self._label(content, "Emotion Recognition System", 32, "bold").grid(row=1, column=0, pady=(0, 18))
@@ -236,9 +299,14 @@ class EmotionRecognitionApp(tk.Tk):
             ).grid(row=2, column=0, pady=(0, 40), sticky="ew")
 
             actions = tk.Frame(content, bg=self.colors["panel"])
-            actions.grid(row=3, column=0, pady=(0, 22))
-            self._button(actions, "Try", self.start_try_mode, True, text_color="#000000").grid(row=0, column=0, padx=10, sticky="ew")
-            self._button(actions, "Sign In", self.show_login, False, text_color="#000000").grid(row=0, column=1, padx=10, sticky="ew")
+            actions.grid(row=3, column=0, sticky="ew", pady=(0, 22))
+            actions.columnconfigure(0, weight=1)
+            self._button(actions, "Try", self.start_try_mode, True, text_color="#000000").grid(
+                row=0, column=0, sticky="ew", pady=(0, 10)
+            )
+            self._button(actions, "Sign In", self.show_login, False, text_color="#000000").grid(
+                row=1, column=0, sticky="ew"
+            )
             self._button(content, "Exit", self.shutdown, False, danger=True, outline=True).grid(row=4, column=0, pady=(6, 0))
 
         self._set_screen(build)
@@ -246,9 +314,7 @@ class EmotionRecognitionApp(tk.Tk):
     def show_login(self):
         def build(frame):
             panel = self._center_panel(frame, max_width=620)
-            content = tk.Frame(panel, bg=self.colors["panel"])
-            content.grid(row=0, column=0, sticky="nsew", padx=54, pady=46)
-            content.columnconfigure(0, weight=1)
+            content = self._panel_content(panel)
 
             self._label(content, "Sign In", 28, "bold").grid(row=0, column=0, pady=(10, 28), sticky="ew")
 
@@ -321,9 +387,7 @@ class EmotionRecognitionApp(tk.Tk):
     def show_register(self):
         def build(frame):
             panel = self._center_panel(frame, max_width=620)
-            content = tk.Frame(panel, bg=self.colors["panel"])
-            content.grid(row=0, column=0, sticky="nsew", padx=54, pady=46)
-            content.columnconfigure(0, weight=1)
+            content = self._panel_content(panel)
 
             self._label(content, "Create Account", 28, "bold").grid(row=0, column=0, pady=(10, 28), sticky="ew")
 
@@ -375,9 +439,7 @@ class EmotionRecognitionApp(tk.Tk):
 
         def build(frame):
             panel = self._center_panel(frame, max_width=800)
-            content = tk.Frame(panel, bg=self.colors["panel"])
-            content.grid(row=0, column=0, sticky="nsew", padx=54, pady=52)
-            content.columnconfigure(0, weight=1)
+            content = self._panel_content(panel)
 
             self._label(content, f"Account: {self.current_user['username']}", 28, "bold").grid(row=0, column=0, pady=(22, 18))
 
@@ -400,11 +462,9 @@ class EmotionRecognitionApp(tk.Tk):
     def show_launching(self, text):
         def build(frame):
             panel = self._center_panel(frame, max_width=760)
-            content = tk.Frame(panel, bg=self.colors["panel"])
-            content.grid(row=0, column=0, sticky="nsew", padx=54, pady=52)
-            content.columnconfigure(0, weight=1)
+            content = self._panel_content(panel)
 
-            self._label(content, text, 28, "bold").grid(row=0, column=0, pady=(110, 18))
+            self._label(content, text, 28, "bold").grid(row=0, column=0, pady=(36, 18))
             self._label(
                 content,
                 "A camera window will open. To finish, press q or Esc in the recognition window.",
