@@ -24,7 +24,7 @@ class EmotionRecognitionApp(tk.Tk):
     def __init__(self):
         super().__init__()
         init_db()
-        self.title("Розпізнавання емоцій")
+        self.title("Emotion Recognition")
         self.geometry("1180x760")
         self.minsize(900, 620)
         self.configure(bg="#eef3f8")
@@ -85,7 +85,7 @@ class EmotionRecognitionApp(tk.Tk):
 
         title = tk.Label(
             bar,
-            text="Програмний модуль аналізу міміки обличчя та класифікації емоцій",
+            text="Facial Expression Analysis and Emotion Classification Module",
             bg=self.colors["accent"],
             fg="#ffffff",
             font=("Arial", 16, "bold"),
@@ -96,7 +96,7 @@ class EmotionRecognitionApp(tk.Tk):
         controls.grid(row=0, column=1, sticky="e", padx=18, pady=14)
         self._button(
             controls,
-            text="Вийти",
+            text="Exit",
             command=self.shutdown,
             danger=True,
             outline=True,
@@ -202,15 +202,15 @@ class EmotionRecognitionApp(tk.Tk):
         username = username_entry.get().strip()
         password = password_entry.get()
         if not username and not password:
-            error_label.config(text="Заповніть логін і пароль.")
+            error_label.config(text="Enter a username and password.")
             username_entry.focus_set()
             return False
         if not username:
-            error_label.config(text="Поле «Логін» обов'язкове.")
+            error_label.config(text="Username is required.")
             username_entry.focus_set()
             return False
         if not password:
-            error_label.config(text="Поле «Пароль» обов'язкове.")
+            error_label.config(text="Password is required.")
             password_entry.focus_set()
             return False
         error_label.config(text="")
@@ -226,20 +226,20 @@ class EmotionRecognitionApp(tk.Tk):
             content.columnconfigure(0, weight=1)
 
 
-            self._label(content, "Система розпізнавання емоцій", 32, "bold").grid(row=1, column=0, pady=(0, 18))
+            self._label(content, "Emotion Recognition System", 32, "bold").grid(row=1, column=0, pady=(0, 18))
             self._label(
                 content,
-                "Можна швидко спробувати систему без збереження даних або увійти в акаунт "
-                "для використання збережених координат обличчя.",
+                "Try the system quickly without saving data, or sign in to use "
+                "saved facial landmark coordinates.",
                 15,
                 color=self.colors["muted"],
             ).grid(row=2, column=0, pady=(0, 40), sticky="ew")
 
             actions = tk.Frame(content, bg=self.colors["panel"])
             actions.grid(row=3, column=0, pady=(0, 22))
-            self._button(actions, "Спробувати", self.start_try_mode, True, text_color="#000000").grid(row=0, column=0, padx=10, sticky="ew")
-            self._button(actions, "Авторизуватися", self.show_login, False, text_color="#000000").grid(row=0, column=1, padx=10, sticky="ew")
-            self._button(content, "Вийти", self.shutdown, False, danger=True, outline=True).grid(row=4, column=0, pady=(6, 0))
+            self._button(actions, "Try", self.start_try_mode, True, text_color="#000000").grid(row=0, column=0, padx=10, sticky="ew")
+            self._button(actions, "Sign In", self.show_login, False, text_color="#000000").grid(row=0, column=1, padx=10, sticky="ew")
+            self._button(content, "Exit", self.shutdown, False, danger=True, outline=True).grid(row=4, column=0, pady=(6, 0))
 
         self._set_screen(build)
 
@@ -250,11 +250,11 @@ class EmotionRecognitionApp(tk.Tk):
             content.grid(row=0, column=0, sticky="nsew", padx=54, pady=46)
             content.columnconfigure(0, weight=1)
 
-            self._label(content, "Вхід", 28, "bold").grid(row=0, column=0, pady=(10, 28), sticky="ew")
+            self._label(content, "Sign In", 28, "bold").grid(row=0, column=0, pady=(10, 28), sticky="ew")
 
             tk.Label(
                 content,
-                text="Логін",
+                text="Username",
                 bg=self.colors["panel"],
                 fg=self.colors["text"],
                 font=("Arial", 13, "bold")
@@ -265,7 +265,7 @@ class EmotionRecognitionApp(tk.Tk):
 
             tk.Label(
                 content,
-                text="Пароль",
+                text="Password",
                 bg=self.colors["panel"],
                 fg=self.colors["text"],
                 font=("Arial", 13, "bold")
@@ -298,7 +298,7 @@ class EmotionRecognitionApp(tk.Tk):
 
             self._button(
                 content,
-                "Увійти",
+                "Sign In",
                 submit,
                 True,
                 outline=True,
@@ -307,14 +307,14 @@ class EmotionRecognitionApp(tk.Tk):
 
             self._button(
                 content,
-                "Зареєструватися",
+                "Create Account",
                 self.show_register,
                 False,
 
                 text_color="#000000"
             ).grid(row=7, column=0, sticky="ew")
 
-            self._button(content, "Назад", self.show_home, text_color="#000000").grid(row=8, column=0, pady=(18, 0))
+            self._button(content, "Back", self.show_home, text_color="#000000").grid(row=8, column=0, pady=(18, 0))
 
         self._set_screen(build)
 
@@ -325,15 +325,15 @@ class EmotionRecognitionApp(tk.Tk):
             content.grid(row=0, column=0, sticky="nsew", padx=54, pady=46)
             content.columnconfigure(0, weight=1)
 
-            self._label(content, "Реєстрація", 28, "bold").grid(row=0, column=0, pady=(10, 28), sticky="ew")
+            self._label(content, "Create Account", 28, "bold").grid(row=0, column=0, pady=(10, 28), sticky="ew")
 
-            tk.Label(content, text="Логін", bg=self.colors["panel"], fg=self.colors["text"],
+            tk.Label(content, text="Username", bg=self.colors["panel"], fg=self.colors["text"],
                      font=("Arial", 13, "bold")).grid(row=1, column=0, sticky="w")
 
             username_entry = self._entry(content)
             username_entry.grid(row=2, column=0, sticky="ew", pady=(8, 18), ipady=8)
 
-            tk.Label(content, text="Пароль", bg=self.colors["panel"], fg=self.colors["text"],
+            tk.Label(content, text="Password", bg=self.colors["panel"], fg=self.colors["text"],
                      font=("Arial", 13, "bold")).grid(row=3, column=0, sticky="w")
 
             password_entry = self._entry(content, show="*")
@@ -356,15 +356,15 @@ class EmotionRecognitionApp(tk.Tk):
             username_entry.bind("<Return>", lambda event: password_entry.focus_set())
             password_entry.bind("<Return>", lambda event: submit())
 
-            self._button(content, "Створити акаунт", submit, True, text_color="#000000", outline=True,).grid(
+            self._button(content, "Create Account", submit, True, text_color="#000000", outline=True,).grid(
                 row=6, column=0, sticky="ew", pady=(0, 12)
             )
 
-            self._button(content, "Вже є акаунт", self.show_login, False).grid(
+            self._button(content, "Already Have an Account", self.show_login, False).grid(
                 row=7, column=0, sticky="ew"
             )
 
-            self._button(content, "Назад", self.show_home, text_color="#000000").grid(row=8, column=0, pady=(18, 0))
+            self._button(content, "Back", self.show_home, text_color="#000000").grid(row=8, column=0, pady=(18, 0))
 
         self._set_screen(build)
 
@@ -379,21 +379,21 @@ class EmotionRecognitionApp(tk.Tk):
             content.grid(row=0, column=0, sticky="nsew", padx=54, pady=52)
             content.columnconfigure(0, weight=1)
 
-            self._label(content, f"Акаунт: {self.current_user['username']}", 28, "bold").grid(row=0, column=0, pady=(22, 18))
+            self._label(content, f"Account: {self.current_user['username']}", 28, "bold").grid(row=0, column=0, pady=(22, 18))
 
             has_face = bool(self.current_user.get("face_coordinates"))
             status = (
-                "Координати обличчя вже збережені. Повторне зчитування не потрібне."
+                "Facial landmark coordinates are already saved. Recapture is not required."
                 if has_face else
-                "Координати обличчя ще не збережені. Під час першого запуску система зчитає обличчя через камеру."
+                "Facial landmark coordinates are not saved yet. On the first run, the system will capture your face through the camera."
             )
             status_card = tk.Frame(content, bg=self.colors["surface"], highlightbackground=self.colors["border"], highlightthickness=1)
             status_card.grid(row=1, column=0, sticky="ew", pady=(0, 32))
             self._label(status_card, status, 14, color=self.colors["muted"]).pack(fill="x", padx=24, pady=22)
 
-            self._button(content, "Запустити розпізнавання", self.start_authorized_mode, True, text_color="#000000").grid(row=2, column=0, sticky="ew", pady=(0, 14))
-            self._button(content, "Повторне зчитування", self.recapture_face_profile, False, outline=True, text_color="#000000").grid(row=3, column=0, sticky="ew", pady=(0, 12))
-            self._button(content, "Вийти з акаунта", self.show_home, False, outline=True, text_color="#000000").grid(row=4, column=0, sticky="ew", pady=(0, 12))
+            self._button(content, "Start Recognition", self.start_authorized_mode, True, text_color="#000000").grid(row=2, column=0, sticky="ew", pady=(0, 14))
+            self._button(content, "Recapture Face", self.recapture_face_profile, False, outline=True, text_color="#000000").grid(row=3, column=0, sticky="ew", pady=(0, 12))
+            self._button(content, "Sign Out", self.show_home, False, outline=True, text_color="#000000").grid(row=4, column=0, sticky="ew", pady=(0, 12))
 
         self._set_screen(build)
 
@@ -407,7 +407,7 @@ class EmotionRecognitionApp(tk.Tk):
             self._label(content, text, 28, "bold").grid(row=0, column=0, pady=(110, 18))
             self._label(
                 content,
-                "Відкриється вікно камери. Для завершення натисніть q або Esc у вікні розпізнавання.",
+                "A camera window will open. To finish, press q or Esc in the recognition window.",
                 14,
                 color=self.colors["muted"],
             ).grid(row=1, column=0, sticky="ew")
@@ -415,7 +415,7 @@ class EmotionRecognitionApp(tk.Tk):
         self._set_screen(build)
 
     def start_try_mode(self):
-        self.show_launching("Запуск пробного режиму...")
+        self.show_launching("Starting try mode...")
         self.after(
             100,
             lambda: self._run_busy(
@@ -430,11 +430,11 @@ class EmotionRecognitionApp(tk.Tk):
         try:
             action()
         except CameraUnavailableError as exc:
-            messagebox.showerror("Помилка", str(exc))
+            messagebox.showerror("Error", str(exc))
         except FaceNotFoundError as exc:
-            messagebox.showerror("Помилка", str(exc))
+            messagebox.showerror("Error", str(exc))
         except Exception as exc:
-            messagebox.showerror("Помилка", f"Не вдалося запустити розпізнавання: {exc}")
+            messagebox.showerror("Error", f"Could not start recognition: {exc}")
         finally:
             self.config(cursor="")
             on_done()
@@ -447,7 +447,7 @@ class EmotionRecognitionApp(tk.Tk):
         def action():
             user = get_user(self.current_user["id"])
             if user is None:
-                messagebox.showerror("Помилка", "Користувача не знайдено.")
+                messagebox.showerror("Error", "User not found.")
                 return
             face_profile = parse_face_profile(user.get("face_coordinates"))
 
@@ -466,7 +466,7 @@ class EmotionRecognitionApp(tk.Tk):
                 session_owner=self.current_user["username"],
             )
 
-        self.show_launching("Запуск розпізнавання...")
+        self.show_launching("Starting recognition...")
         self.after(100, lambda: self._run_busy(action, self.show_dashboard))
 
     def recapture_face_profile(self):
@@ -477,7 +477,7 @@ class EmotionRecognitionApp(tk.Tk):
         def action():
             user = get_user(self.current_user["id"])
             if user is None:
-                messagebox.showerror("Помилка", "Користувача не знайдено.")
+                messagebox.showerror("Error", "User not found.")
                 return
 
             face_profile = capture_face_profile()
@@ -486,9 +486,9 @@ class EmotionRecognitionApp(tk.Tk):
                 serialize_face_profile(face_profile),
             )
             self.current_user = get_user(user["id"])
-            messagebox.showinfo("Готово", "Координати обличчя оновлено.")
+            messagebox.showinfo("Done", "Facial landmark coordinates have been updated.")
 
-        self.show_launching("Повторне зчитування обличчя...")
+        self.show_launching("Recapturing face...")
         self.after(100, lambda: self._run_busy(action, self.show_dashboard))
 
 

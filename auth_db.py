@@ -138,7 +138,7 @@ def _create_user_sqlite(username, db_path, password_hash, created_at):
             )
             user_id = cursor.lastrowid
     except sqlite3.IntegrityError as exc:
-        raise UserAlreadyExistsError("Користувач уже існує.") from exc
+        raise UserAlreadyExistsError("User already exists.") from exc
 
     return {
         "id": user_id,
@@ -160,7 +160,7 @@ def _create_user_postgres(username, password_hash, created_at):
                 (username, password_hash, created_at),
             ).fetchone()
     except pg_errors.UniqueViolation as exc:
-        raise UserAlreadyExistsError("Користувач уже існує.") from exc
+        raise UserAlreadyExistsError("User already exists.") from exc
 
     return dict(user)
 
@@ -168,7 +168,7 @@ def _create_user_postgres(username, password_hash, created_at):
 def create_user(username, password, db_path=None):
     username = username.strip()
     if not username or not password:
-        raise ValueError("Введіть логін і пароль.")
+        raise ValueError("Enter a username and password.")
 
     init_db(db_path)
     password_hash = _hash_password(password)
@@ -192,7 +192,7 @@ def _authenticate_user_sqlite(username, password, db_path):
         ).fetchone()
 
     if user is None or not _verify_password(password, user["password_hash"]):
-        raise InvalidCredentialsError("Неправильний логін або пароль.")
+        raise InvalidCredentialsError("Incorrect username or password.")
 
     return {
         "id": user["id"],
@@ -214,7 +214,7 @@ def _authenticate_user_postgres(username, password):
         ).fetchone()
 
     if user is None or not _verify_password(password, user["password_hash"]):
-        raise InvalidCredentialsError("Неправильний логін або пароль.")
+        raise InvalidCredentialsError("Incorrect username or password.")
 
     return {
         "id": user["id"],

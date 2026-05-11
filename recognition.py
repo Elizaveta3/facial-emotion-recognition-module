@@ -50,7 +50,6 @@ def _create_landmarker_options():
 
 
 def run_calibration(cap, landmarker, calibrator, return_face_coordinates=False):
-    """Runs neutral-face calibration."""
     print("CALIBRATION: Keep a neutral face for ~3 seconds...")
     last_landmarks_3d = None
 
@@ -117,7 +116,7 @@ def capture_face_profile(num_frames=90):
     """Captures one user face profile for storing in SQLite."""
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        raise CameraUnavailableError("Камера недоступна.")
+        raise CameraUnavailableError("Camera is unavailable.")
 
     FaceLandmarker = mp.tasks.vision.FaceLandmarker
     try:
@@ -134,7 +133,7 @@ def capture_face_profile(num_frames=90):
         cv2.destroyAllWindows()
 
     if baseline is None or landmarks_3d is None:
-        raise FaceNotFoundError("Обличчя не знайдено.")
+        raise FaceNotFoundError("Face not found.")
 
     return {
         "baseline": baseline,
@@ -168,7 +167,7 @@ def _safe_session_owner(value):
 def run_emotion_recognition(face_profile=None, save_outputs=True, session_owner=None):
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        raise CameraUnavailableError("Камера недоступна.")
+        raise CameraUnavailableError("Camera is unavailable.")
 
     FaceLandmarker = mp.tasks.vision.FaceLandmarker
     session_id = time.strftime("%Y%m%d_%H%M%S")

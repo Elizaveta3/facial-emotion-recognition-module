@@ -2,7 +2,6 @@ SCALAR_KEYS = ["ear_avg", "mar", "mouth_width", "smile_coeff", "brow_dist"]
 
 
 class BaselineCalibrator:
-    """Builds a neutral baseline."""
 
     def __init__(self, num_frames=90):
         self.num_frames = num_frames
