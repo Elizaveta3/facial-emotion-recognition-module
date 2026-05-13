@@ -19,6 +19,7 @@ OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 
 CSV_FIELDS = [
     "frame", "timestamp", "emotion",
+    "is_face_frontal", "face_yaw_ratio", "face_roll_degrees",
     "ear_avg_raw", "mar_raw", "smile_coeff_raw", "mouth_width_raw", "brow_dist_raw", "mouth_asymmetry_raw", "upper_lip_raise_raw",
     "ear_avg_smooth", "mar_smooth", "smile_coeff_smooth", "mouth_width_smooth", "brow_dist_smooth", "mouth_asymmetry_smooth", "upper_lip_raise_smooth",
 ]
@@ -232,19 +233,26 @@ def run_emotion_recognition(face_profile=None, save_outputs=True, session_owner=
 
                     raw_params = extract_all_parameters(landmarks_3d)
                     smoothed = smoother.update(raw_params)
-                    emotion = classify_emotion(smoothed, baseline)
+                    if raw_params["is_face_frontal"]:
+                        emotion = classify_emotion(smoothed, baseline)
+                    else:
+                        emotion = "Unclassified"
 
                     frame_count += 1
                     if frame_count % 30 == 0:
                         print(f"[{mode}] [{emotion:>10s}]  EAR={smoothed['ear_avg']:.3f}  "
                               f"MAR={smoothed['mar']:.3f}  Smile={smoothed['smile_coeff']:.4f}  "
                               f"MouthW={smoothed['mouth_width']:.3f}  BrowD={smoothed['brow_dist']:.4f}  "
-                              f"Asym={smoothed['mouth_asymmetry']:.4f}  LipRaise={smoothed['upper_lip_raise']:.3f}")
+                              f"Asym={smoothed['mouth_asymmetry']:.4f}  LipRaise={smoothed['upper_lip_raise']:.3f}  "
+                              f"Yaw={raw_params['face_yaw_ratio']:.3f}  Roll={raw_params['face_roll_degrees']:.1f}")
 
                     record = {
                         "frame": frame_count,
                         "timestamp": timestamp_ms,
                         "emotion": emotion,
+                        "is_face_frontal": raw_params["is_face_frontal"],
+                        "face_yaw_ratio": round(raw_params["face_yaw_ratio"], 5),
+                        "face_roll_degrees": round(raw_params["face_roll_degrees"], 2),
                     }
                     for k in SCALAR_KEYS:
                         record[f"{k}_raw"] = round(raw_params[k], 5)
@@ -259,6 +267,7 @@ def run_emotion_recognition(face_profile=None, save_outputs=True, session_owner=
                     y_offset = 30
                     lines = [
                         f"Emotion: {emotion}  [{mode}]",
+                        f"Face: {'frontal' if raw_params['is_face_frontal'] else 'turn forward'}",
                         f"EAR: {smoothed['ear_avg']:.3f}",
                         f"MAR: {smoothed['mar']:.3f}",
                         f"Smile: {smoothed['smile_coeff']:.4f}",
@@ -266,6 +275,7 @@ def run_emotion_recognition(face_profile=None, save_outputs=True, session_owner=
                         f"Brow D: {smoothed['brow_dist']:.4f}",
                         f"Asym: {smoothed['mouth_asymmetry']:.4f}",
                         f"LipRaise: {smoothed['upper_lip_raise']:.3f}",
+                        f"Yaw/Roll: {raw_params['face_yaw_ratio']:.2f} / {raw_params['face_roll_degrees']:.1f}",
                     ]
                     for i, line in enumerate(lines):
                         color = (0, 255, 255) if i == 0 else (255, 255, 255)

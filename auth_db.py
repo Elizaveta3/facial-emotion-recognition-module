@@ -20,6 +20,11 @@ BASE_DIR = os.path.dirname(__file__)
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 DEFAULT_DATABASE_URL = "postgresql:///emotion_recognition"
 PBKDF2_ITERATIONS = 200_000
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_REQUIREMENTS_MESSAGE = (
+    "Password must be at least 8 characters and use only English letters, "
+    "numbers, or symbols."
+)
 
 
 class UserAlreadyExistsError(Exception):
@@ -28,6 +33,11 @@ class UserAlreadyExistsError(Exception):
 
 class InvalidCredentialsError(Exception):
     pass
+
+
+def validate_password(password):
+    if len(password) < PASSWORD_MIN_LENGTH or not password.isascii():
+        raise ValueError(PASSWORD_REQUIREMENTS_MESSAGE)
 
 
 def _load_env_value(key, env_path=ENV_PATH):
@@ -169,6 +179,7 @@ def create_user(username, password, db_path=None):
     username = username.strip()
     if not username or not password:
         raise ValueError("Enter a username and password.")
+    validate_password(password)
 
     init_db(db_path)
     password_hash = _hash_password(password)

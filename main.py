@@ -3,12 +3,14 @@ from tkinter import messagebox
 
 from auth_db import (
     InvalidCredentialsError,
+    PASSWORD_REQUIREMENTS_MESSAGE,
     UserAlreadyExistsError,
     authenticate_user,
     create_user,
     get_user,
     init_db,
     update_face_coordinates,
+    validate_password,
 )
 from recognition import (
     CameraUnavailableError,
@@ -409,6 +411,12 @@ class EmotionRecognitionApp(tk.Tk):
 
             def submit():
                 if not self._validate_required_fields(username_entry, password_entry, error_label):
+                    return
+                try:
+                    validate_password(password_entry.get())
+                except ValueError:
+                    error_label.config(text=PASSWORD_REQUIREMENTS_MESSAGE)
+                    password_entry.focus_set()
                     return
                 try:
                     self.current_user = create_user(username_entry.get(), password_entry.get())

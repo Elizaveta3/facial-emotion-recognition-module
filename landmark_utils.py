@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 
 RIGHT_EYE = [33, 160, 158, 133, 153, 144]
@@ -27,6 +29,9 @@ FACE_BOTTOM = 152
 
 UPPER_LIP_TOP = 0
 NOSE_BASE = 2
+
+MAX_FACE_YAW_RATIO = 0.18
+MAX_FACE_ROLL_DEGREES = 15.0
 
 
 def _xy(landmarks):
@@ -122,6 +127,38 @@ def compute_eye_position(landmarks, eye_indices):
     return rel_x, rel_y
 
 
+def estimate_face_orientation(landmarks):
+    lm = _xy(landmarks)
+    face_w = euclidean_distance(lm[FACE_LEFT], lm[FACE_RIGHT])
+    if face_w == 0:
+        return {
+            "yaw_ratio": 0.0,
+            "roll_degrees": 0.0,
+            "is_frontal": False,
+        }
+
+    face_center_x = (lm[FACE_LEFT][0] + lm[FACE_RIGHT][0]) / 2.0
+    yaw_ratio = (lm[NOSE_BASE][0] - face_center_x) / face_w
+
+    right_eye_center = np.array([lm[i] for i in RIGHT_EYE]).mean(axis=0)
+    left_eye_center = np.array([lm[i] for i in LEFT_EYE]).mean(axis=0)
+    eye_delta = left_eye_center - right_eye_center
+    roll_degrees = math.degrees(math.atan2(eye_delta[1], eye_delta[0]))
+
+    return {
+        "yaw_ratio": yaw_ratio,
+        "roll_degrees": roll_degrees,
+        "is_frontal": (
+            abs(yaw_ratio) <= MAX_FACE_YAW_RATIO
+            and abs(roll_degrees) <= MAX_FACE_ROLL_DEGREES
+        ),
+    }
+
+
+def is_face_frontal(landmarks):
+    return estimate_face_orientation(landmarks)["is_frontal"]
+
+
 def extract_all_parameters(landmarks):
     ear_right = compute_ear(landmarks, RIGHT_EYE)
     ear_left = compute_ear(landmarks, LEFT_EYE)
@@ -136,6 +173,7 @@ def extract_all_parameters(landmarks):
 
     eye_pos_right = compute_eye_position(landmarks, RIGHT_EYE)
     eye_pos_left = compute_eye_position(landmarks, LEFT_EYE)
+    orientation = estimate_face_orientation(landmarks)
 
     return {
         "ear_right": ear_right,
@@ -149,6 +187,9 @@ def extract_all_parameters(landmarks):
         "upper_lip_raise": upper_lip_raise,
         "eye_pos_right": eye_pos_right,
         "eye_pos_left": eye_pos_left,
+        "face_yaw_ratio": orientation["yaw_ratio"],
+        "face_roll_degrees": orientation["roll_degrees"],
+        "is_face_frontal": orientation["is_frontal"],
     }
 
 

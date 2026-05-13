@@ -5,6 +5,7 @@ import unittest
 
 from auth_db import (
     InvalidCredentialsError,
+    PASSWORD_REQUIREMENTS_MESSAGE,
     UserAlreadyExistsError,
     _hash_password,
     _verify_password,
@@ -13,6 +14,7 @@ from auth_db import (
     get_user,
     init_db,
     update_face_coordinates,
+    validate_password,
 )
 
 
@@ -25,38 +27,47 @@ class AuthDbTest(unittest.TestCase):
         self.tmpdir.cleanup()
 
     def test_create_user_trims_username_and_authenticates_password(self):
-        user = create_user("  natalia  ", "secret", db_path=self.db_path)
+        user = create_user("  natalia  ", "secret123", db_path=self.db_path)
 
         self.assertEqual(user["username"], "natalia")
         self.assertIsNone(user["face_coordinates"])
-        authenticated = authenticate_user("natalia", "secret", db_path=self.db_path)
+        authenticated = authenticate_user("natalia", "secret123", db_path=self.db_path)
         self.assertEqual(authenticated["id"], user["id"])
         self.assertEqual(authenticated["username"], "natalia")
 
     def test_create_user_rejects_empty_username_or_password(self):
         with self.assertRaises(ValueError):
-            create_user("   ", "secret", db_path=self.db_path)
+            create_user("   ", "secret123", db_path=self.db_path)
 
         with self.assertRaises(ValueError):
             create_user("natalia", "", db_path=self.db_path)
 
+    def test_create_user_rejects_short_or_non_english_password(self):
+        with self.assertRaisesRegex(ValueError, PASSWORD_REQUIREMENTS_MESSAGE):
+            create_user("natalia", "secret", db_path=self.db_path)
+
+        with self.assertRaisesRegex(ValueError, PASSWORD_REQUIREMENTS_MESSAGE):
+            create_user("natalia", "пароль123", db_path=self.db_path)
+
+        validate_password("secret123")
+
     def test_create_user_rejects_duplicate_username(self):
-        create_user("natalia", "secret", db_path=self.db_path)
+        create_user("natalia", "secret123", db_path=self.db_path)
 
         with self.assertRaises(UserAlreadyExistsError):
-            create_user("natalia", "another", db_path=self.db_path)
+            create_user("natalia", "another1", db_path=self.db_path)
 
     def test_authenticate_user_rejects_wrong_password_and_missing_user(self):
-        create_user("natalia", "secret", db_path=self.db_path)
+        create_user("natalia", "secret123", db_path=self.db_path)
 
         with self.assertRaises(InvalidCredentialsError):
-            authenticate_user("natalia", "wrong", db_path=self.db_path)
+            authenticate_user("natalia", "wrongpass", db_path=self.db_path)
 
         with self.assertRaises(InvalidCredentialsError):
-            authenticate_user("missing", "secret", db_path=self.db_path)
+            authenticate_user("missing", "secret123", db_path=self.db_path)
 
     def test_update_face_coordinates_and_get_user(self):
-        user = create_user("natalia", "secret", db_path=self.db_path)
+        user = create_user("natalia", "secret123", db_path=self.db_path)
 
         update_face_coordinates(user["id"], '{"baseline": {}}', db_path=self.db_path)
         stored = get_user(user["id"], db_path=self.db_path)

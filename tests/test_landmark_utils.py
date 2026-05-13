@@ -31,6 +31,7 @@ from landmark_utils import (
     compute_smile_coefficient,
     compute_upper_lip_raise,
     euclidean_distance,
+    estimate_face_orientation,
     extract_all_parameters,
     landmarks_to_list,
 )
@@ -99,6 +100,52 @@ class LandmarkUtilsTest(unittest.TestCase):
 
         self.assertEqual(compute_eye_position(landmarks, LEFT_EYE), (0.5, 0.5))
 
+    def test_estimate_face_orientation_accepts_frontal_face(self):
+        landmarks = blank_landmarks()
+        landmarks[FACE_LEFT, :2] = [0, 0]
+        landmarks[FACE_RIGHT, :2] = [100, 0]
+        landmarks[NOSE_BASE, :2] = [50, 70]
+        for index in RIGHT_EYE:
+            landmarks[index, :2] = [35, 40]
+        for index in LEFT_EYE:
+            landmarks[index, :2] = [65, 40]
+
+        orientation = estimate_face_orientation(landmarks)
+
+        self.assertTrue(orientation["is_frontal"])
+        self.assertAlmostEqual(orientation["yaw_ratio"], 0.0)
+        self.assertAlmostEqual(orientation["roll_degrees"], 0.0)
+
+    def test_estimate_face_orientation_rejects_large_yaw(self):
+        landmarks = blank_landmarks()
+        landmarks[FACE_LEFT, :2] = [0, 0]
+        landmarks[FACE_RIGHT, :2] = [100, 0]
+        landmarks[NOSE_BASE, :2] = [80, 70]
+        for index in RIGHT_EYE:
+            landmarks[index, :2] = [35, 40]
+        for index in LEFT_EYE:
+            landmarks[index, :2] = [65, 40]
+
+        orientation = estimate_face_orientation(landmarks)
+
+        self.assertFalse(orientation["is_frontal"])
+        self.assertGreater(orientation["yaw_ratio"], 0.18)
+
+    def test_estimate_face_orientation_rejects_large_roll(self):
+        landmarks = blank_landmarks()
+        landmarks[FACE_LEFT, :2] = [0, 0]
+        landmarks[FACE_RIGHT, :2] = [100, 0]
+        landmarks[NOSE_BASE, :2] = [50, 70]
+        for index in RIGHT_EYE:
+            landmarks[index, :2] = [35, 40]
+        for index in LEFT_EYE:
+            landmarks[index, :2] = [65, 55]
+
+        orientation = estimate_face_orientation(landmarks)
+
+        self.assertFalse(orientation["is_frontal"])
+        self.assertGreater(abs(orientation["roll_degrees"]), 15.0)
+
     def test_extract_all_parameters_returns_expected_keys(self):
         landmarks = blank_landmarks()
         landmarks[FACE_LEFT, :2] = [0, 0]
@@ -141,6 +188,9 @@ class LandmarkUtilsTest(unittest.TestCase):
                 "upper_lip_raise",
                 "eye_pos_right",
                 "eye_pos_left",
+                "face_yaw_ratio",
+                "face_roll_degrees",
+                "is_face_frontal",
             },
         )
         self.assertAlmostEqual(params["ear_avg"], 0.5)
