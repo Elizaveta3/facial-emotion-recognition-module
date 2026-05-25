@@ -54,7 +54,6 @@ EMOTIONS = (
 
 
 def classify_emotion(params, baseline=None):
-    """Classifies emotion from facial parameters."""
     if baseline is None:
         return _classify_absolute(params)
     return _classify_delta(params, baseline)

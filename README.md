@@ -360,31 +360,6 @@ python3 main.py
 - `landmarks_3d` - координати точок обличчя;
 - `captured_at` - дата й час зчитування.
 
-## Міграція зі старої SQLite-бази
-
-Якщо в проєкті уже є старий файл:
-
-```text
-users.sqlite3
-```
-
-користувачів можна перенести в PostgreSQL скриптом:
-
-```bash
-python3 migrate_sqlite_to_postgres.py
-```
-
-Скрипт переносить:
-
-- `username`;
-- `password_hash`;
-- `face_coordinates`;
-- `created_at`.
-
-Паролі повторно вводити не потрібно, тому що переносяться вже готові хеші.
-
-Якщо користувач із таким `username` уже є в PostgreSQL, він не дублюється.
-
 ## Структура проєкту
 
 ```text
@@ -395,7 +370,6 @@ landmark_utils.py             Розрахунок параметрів обли
 emotion_classifier.py         Правила класифікації емоцій
 calibration.py                Калібрування нейтрального виразу обличчя
 smoothing.py                  EMA-згладжування параметрів
-migrate_sqlite_to_postgres.py Перенесення користувачів зі старої SQLite-бази в PostgreSQL
 tests/                        Unit-тести системи
 output/                       CSV/JSON-результати авторизованих сесій
 .env.example                  Приклад налаштування DATABASE_URL

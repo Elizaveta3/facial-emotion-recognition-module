@@ -9,18 +9,15 @@ class BaselineCalibrator:
         self.baseline = None
 
     def add_frame(self, params):
-        """Stores one frame."""
         self.frames.append({k: params[k] for k in SCALAR_KEYS})
 
     def is_complete(self):
         return len(self.frames) >= self.num_frames
 
     def get_progress(self):
-        """Returns progress in percent."""
         return min(100, int(len(self.frames) / self.num_frames * 100))
 
     def compute_baseline(self):
-        """Averages collected values."""
         if not self.frames:
             return None
         self.baseline = {}

@@ -10,14 +10,12 @@ SCALAR_KEYS = [
 
 
 class ParameterSmoother:
-    """EMA smoother for facial parameters."""
 
     def __init__(self, alpha=0.3):
         self.alpha = alpha
         self.smoothed = {}
 
     def update(self, params):
-        """Updates scalar values."""
         for key in SCALAR_KEYS:
             raw = params.get(key, 0.0)
 
