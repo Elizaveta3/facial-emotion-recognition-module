@@ -25,6 +25,9 @@ CSV_FIELDS = [
 ]
 
 SCALAR_KEYS = ["ear_avg", "mar", "smile_coeff", "mouth_width", "brow_dist", "mouth_asymmetry", "upper_lip_raise"]
+CAMERA_UNAVAILABLE_MESSAGE = (
+    "Camera is unavailable. Check that it is connected and not used by another app."
+)
 
 
 class CameraUnavailableError(Exception):
@@ -33,6 +36,14 @@ class CameraUnavailableError(Exception):
 
 class FaceNotFoundError(Exception):
     pass
+
+
+def _open_camera(camera_index=0):
+    cap = cv2.VideoCapture(camera_index)
+    if not cap.isOpened():
+        cap.release()
+        raise CameraUnavailableError(CAMERA_UNAVAILABLE_MESSAGE)
+    return cap
 
 
 def _create_landmarker_options():
@@ -114,9 +125,7 @@ def run_calibration(cap, landmarker, calibrator, return_face_coordinates=False):
 
 
 def capture_face_profile(num_frames=90):
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        raise CameraUnavailableError("Camera is unavailable.")
+    cap = _open_camera()
 
     FaceLandmarker = mp.tasks.vision.FaceLandmarker
     try:
@@ -165,9 +174,7 @@ def _safe_session_owner(value):
 
 
 def run_emotion_recognition(face_profile=None, save_outputs=True, session_owner=None):
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        raise CameraUnavailableError("Camera is unavailable.")
+    cap = _open_camera()
 
     FaceLandmarker = mp.tasks.vision.FaceLandmarker
     session_id = time.strftime("%Y%m%d_%H%M%S")
