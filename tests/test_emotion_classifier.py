@@ -88,6 +88,18 @@ class EmotionClassifierTest(unittest.TestCase):
         }
         self.assertEqual(classify_emotion(params), "Neutral")
 
+    def test_absolute_angry_accepts_strong_brow_furrow_with_narrower_eyes(self):
+        params = {
+            "ear_avg": 0.248,
+            "mar": 0.05,
+            "smile_coeff": -0.010,
+            "mouth_width": 0.34,
+            "brow_dist": 0.108,
+            "mouth_asymmetry": 0.004,
+            "upper_lip_raise": 0.040,
+        }
+        self.assertEqual(classify_emotion(params), "Angry")
+
     def test_absolute_angry_is_blocked_when_eyes_are_too_wide(self):
         params = {
             "ear_avg": 0.33,
@@ -282,6 +294,27 @@ class EmotionClassifierTest(unittest.TestCase):
             "upper_lip_raise": 0.070,
         }
         self.assertEqual(classify_emotion(params, baseline), "Neutral")
+
+    def test_delta_angry_accepts_strong_brow_drop_with_narrower_eyes(self):
+        baseline = {
+            "ear_avg": 0.29,
+            "mar": 0.02,
+            "smile_coeff": -0.002,
+            "mouth_width": 0.34,
+            "brow_dist": 0.13,
+            "mouth_asymmetry": 0.003,
+            "upper_lip_raise": 0.078,
+        }
+        params = {
+            "ear_avg": 0.242,
+            "mar": 0.04,
+            "smile_coeff": -0.009,
+            "mouth_width": 0.34,
+            "brow_dist": 0.108,
+            "mouth_asymmetry": 0.005,
+            "upper_lip_raise": 0.055,
+        }
+        self.assertEqual(classify_emotion(params, baseline), "Angry")
 
     def test_delta_angry_is_blocked_when_eyes_open_too_wide(self):
         baseline = {

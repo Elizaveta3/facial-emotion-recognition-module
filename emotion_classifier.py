@@ -14,6 +14,7 @@ MAR_CLOSED = 0.08
 MOUTH_WIDTH_SMILE = 0.43
 
 BROW_DIST_FURROWED = 0.118
+BROW_DIST_STRONG_FURROWED = 0.112
 BROW_DIST_RELAXED = 0.128
 
 MOUTH_ASYM_HIGH = 0.013
@@ -34,6 +35,7 @@ DELTA_MAR_CLOSED = 0.03
 DELTA_MW_SMILE = 0.015
 DELTA_BROW_LOW = -0.02
 DELTA_BROW_FURROWED = -0.012
+DELTA_BROW_STRONG_FURROWED = -0.02
 DELTA_BROW_SAD = -0.004
 DELTA_ASYM_HIGH = 0.008
 DELTA_ASYM_LOW = 0.005
@@ -71,9 +73,14 @@ def _absolute_disgust_signal(ear, brow_dist, mar, smile):
 def _absolute_angry_signal(ear, brow_dist, mar, mouth_asym, smile, upper_lip_raise):
     if smile >= SMILE_COEFF_HIGH or mouth_asym >= MOUTH_ASYM_HIGH:
         return False
-    if upper_lip_raise < UPPER_LIP_RAISE_BLOCK_ANGER:
-        return False
     if mar >= MAR_CLOSED:
+        return False
+
+    strong_brow_furrow = brow_dist <= BROW_DIST_STRONG_FURROWED
+    if strong_brow_furrow:
+        return EAR_TENSE <= ear <= EAR_HIGH
+
+    if upper_lip_raise < UPPER_LIP_RAISE_BLOCK_ANGER:
         return False
     return brow_dist < BROW_DIST_FURROWED and EAR_LOW <= ear <= EAR_HIGH
 
@@ -90,9 +97,14 @@ def _delta_disgust_signal(d_ear, d_brow, d_mar, d_smile):
 def _delta_angry_signal(d_ear, d_brow, d_mar, d_asym, d_smile, d_lip_raise):
     if d_smile >= -0.002 or d_asym >= DELTA_ASYM_HIGH:
         return False
-    if d_lip_raise < -DELTA_LIP_RAISE:
-        return False
     if d_mar >= DELTA_MAR_CLOSED:
+        return False
+
+    strong_brow_furrow = d_brow <= DELTA_BROW_STRONG_FURROWED
+    if strong_brow_furrow:
+        return -0.05 <= d_ear <= DELTA_EAR_HIGH
+
+    if d_lip_raise < -DELTA_LIP_RAISE:
         return False
     return d_brow < DELTA_BROW_FURROWED and DELTA_EAR_LOW <= d_ear <= DELTA_EAR_HIGH
 

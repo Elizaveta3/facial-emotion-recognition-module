@@ -8,7 +8,7 @@ from auth_db import (
     authenticate_user,
     create_user,
     get_user,
-    init_db,
+    psycopg,
     update_face_coordinates,
     validate_password,
 )
@@ -25,7 +25,6 @@ from recognition import (
 class EmotionRecognitionApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        init_db()
         self.title("Emotion Recognition")
         self.geometry("1180x760")
         self.minsize(520, 560)
@@ -283,6 +282,18 @@ class EmotionRecognitionApp(tk.Tk):
         error_label.config(text="")
         return True
 
+    def _database_error_message(self, exc):
+        return (
+            "Database is unavailable. Check that PostgreSQL is running and "
+            f"DATABASE_URL is configured correctly. Details: {exc}"
+        )
+
+    def _is_database_error(self, exc):
+        database_errors = (RuntimeError,)
+        if psycopg is not None:
+            database_errors = (*database_errors, psycopg.OperationalError)
+        return isinstance(exc, database_errors)
+
     def show_home(self):
         self.current_user = None
 
@@ -359,6 +370,10 @@ class EmotionRecognitionApp(tk.Tk):
                     self.show_dashboard()
                 except InvalidCredentialsError as exc:
                     error_label.config(text=str(exc))
+                except Exception as exc:
+                    if not self._is_database_error(exc):
+                        raise
+                    error_label.config(text=self._database_error_message(exc))
 
             username_entry.focus_set()
             username_entry.bind("<Return>", lambda event: password_entry.focus_set())
@@ -423,6 +438,10 @@ class EmotionRecognitionApp(tk.Tk):
                     self.show_dashboard()
                 except (UserAlreadyExistsError, ValueError) as exc:
                     error_label.config(text=str(exc))
+                except Exception as exc:
+                    if not self._is_database_error(exc):
+                        raise
+                    error_label.config(text=self._database_error_message(exc))
 
             username_entry.focus_set()
             username_entry.bind("<Return>", lambda event: password_entry.focus_set())
@@ -513,19 +532,32 @@ class EmotionRecognitionApp(tk.Tk):
             return
 
         def action():
-            user = get_user(self.current_user["id"])
-            if user is None:
-                messagebox.showerror("Error", "User not found.")
+            try:
+                user = get_user(self.current_user["id"])
+                if user is None:
+                    messagebox.showerror("Error", "User not found.")
+                    return
+            except Exception as exc:
+                if not self._is_database_error(exc):
+                    raise
+                messagebox.showerror("Error", self._database_error_message(exc))
                 return
+
             face_profile = parse_face_profile(user.get("face_coordinates"))
 
             if face_profile is None:
                 face_profile = capture_face_profile()
-                update_face_coordinates(
-                    user["id"],
-                    serialize_face_profile(face_profile),
-                )
-                user = get_user(user["id"])
+                try:
+                    update_face_coordinates(
+                        user["id"],
+                        serialize_face_profile(face_profile),
+                    )
+                    user = get_user(user["id"])
+                except Exception as exc:
+                    if not self._is_database_error(exc):
+                        raise
+                    messagebox.showerror("Error", self._database_error_message(exc))
+                    return
 
             self.current_user = user
             run_emotion_recognition(
@@ -543,17 +575,29 @@ class EmotionRecognitionApp(tk.Tk):
             return
 
         def action():
-            user = get_user(self.current_user["id"])
-            if user is None:
-                messagebox.showerror("Error", "User not found.")
+            try:
+                user = get_user(self.current_user["id"])
+                if user is None:
+                    messagebox.showerror("Error", "User not found.")
+                    return
+            except Exception as exc:
+                if not self._is_database_error(exc):
+                    raise
+                messagebox.showerror("Error", self._database_error_message(exc))
                 return
 
             face_profile = capture_face_profile()
-            update_face_coordinates(
-                user["id"],
-                serialize_face_profile(face_profile),
-            )
-            self.current_user = get_user(user["id"])
+            try:
+                update_face_coordinates(
+                    user["id"],
+                    serialize_face_profile(face_profile),
+                )
+                self.current_user = get_user(user["id"])
+            except Exception as exc:
+                if not self._is_database_error(exc):
+                    raise
+                messagebox.showerror("Error", self._database_error_message(exc))
+                return
             messagebox.showinfo("Done", "Facial landmark coordinates have been updated.")
 
         self.show_launching("Recapturing face...")
